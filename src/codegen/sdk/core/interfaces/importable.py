@@ -15,7 +15,7 @@ from codegen.sdk.extensions.sort import sort_editables
 from codegen.shared.decorators.docs import apidoc, noapidoc
 
 if TYPE_CHECKING:
-    from codegen.sdk.codebase.codebase_graph import CodebaseGraph
+    from codegen.sdk.codebase.codebase_context import CodebaseContext
     from codegen.sdk.core.import_resolution import Import
     from codegen.sdk.core.interfaces.editable import Editable
     from codegen.sdk.core.symbol import Symbol
@@ -34,10 +34,10 @@ class Importable(Expression[Parent], HasName, Generic[Parent]):
 
     node_id: int
 
-    def __init__(self, ts_node: TSNode, file_node_id: NodeId, G: "CodebaseGraph", parent: Parent) -> None:
+    def __init__(self, ts_node: TSNode, file_node_id: NodeId, ctx: "CodebaseContext", parent: Parent) -> None:
         if not hasattr(self, "node_id"):
-            self.node_id = G.add_node(self)
-        super().__init__(ts_node, file_node_id, G, parent)
+            self.node_id = ctx.add_node(self)
+        super().__init__(ts_node, file_node_id, ctx, parent)
         if self.file:
             self.file._nodes.append(self)
 
@@ -85,11 +85,11 @@ class Importable(Expression[Parent], HasName, Generic[Parent]):
         Opposite of `usages`
         """
         # TODO: sort out attribute usages in dependencies
-        edges = [x for x in self.G.out_edges(self.node_id) if x[2].type == EdgeType.SYMBOL_USAGE]
+        edges = [x for x in self.ctx.out_edges(self.node_id) if x[2].type == EdgeType.SYMBOL_USAGE]
         unique_dependencies = []
         for edge in edges:
             if edge[2].usage.usage_type is None or edge[2].usage.usage_type in usage_types:
-                dependency = self.G.get_node(edge[1])
+                dependency = self.ctx.get_node(edge[1])
                 unique_dependencies.append(dependency)
         return sort_editables(unique_dependencies, by_file=True)
 
@@ -120,8 +120,8 @@ class Importable(Expression[Parent], HasName, Generic[Parent]):
         Returns a list of node ids for edges that were removed.
         """
         # Must store edges to remove in a static read-only view before removing to avoid concurrent dict modification
-        for v in self.G.successors(self.node_id, edge_type=edge_type):
-            self.G.remove_edge(self.node_id, v.node_id, edge_type=edge_type)
+        for v in self.ctx.successors(self.node_id, edge_type=edge_type):
+            self.ctx.remove_edge(self.node_id, v.node_id, edge_type=edge_type)
 
     @property
     @noapidoc

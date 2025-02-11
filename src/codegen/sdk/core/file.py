@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Generic, Literal, Self, TypeVar, override
 from tree_sitter import Node as TSNode
 
 from codegen.sdk._proxy import proxy_property
-from codegen.sdk.codebase.codebase_graph import CodebaseGraph
+from codegen.sdk.codebase.codebase_context import CodebaseContext
 from codegen.sdk.codebase.range_index import RangeIndex
 from codegen.sdk.codebase.span import Range
 from codegen.sdk.core.autocommit import commiter, mover, reader, remover, writer
@@ -72,15 +72,15 @@ class File(Editable[None]):
     _binary: bool = False
     _range_index: RangeIndex
 
-    def __init__(self, filepath: PathLike, G: CodebaseGraph, ts_node: TSNode | None = None, binary: bool = False) -> None:
+    def __init__(self, filepath: PathLike, ctx: CodebaseContext, ts_node: TSNode | None = None, binary: bool = False) -> None:
         if ts_node is None:
             # TODO: this is a temp hack to deal with all symbols needing a TSNode.
             parser = get_parser_by_filepath_or_extension(".py")
             ts_node = parser.parse(bytes("", "utf-8")).root_node
         self._range_index = RangeIndex()
-        super().__init__(ts_node, getattr(self, "node_id", None), G, None)
-        self.path = self.G.to_absolute(filepath)
-        self.file_path = str(self.G.to_relative(self.path))
+        super().__init__(ts_node, getattr(self, "node_id", None), ctx, None)
+        self.path = self.ctx.to_absolute(filepath)
+        self.file_path = str(self.ctx.to_relative(self.path))
         self.name = self.path.stem
         self._directory = None
         self._binary = binary
@@ -109,11 +109,11 @@ class File(Editable[None]):
 
     @classmethod
     @noapidoc
-    def from_content(cls, filepath: str | Path, content: str | bytes, G: CodebaseGraph, sync: bool = False, binary: bool = False) -> Self | None:
+    def from_content(cls, filepath: str | Path, content: str | bytes, ctx: CodebaseContext, sync: bool = False, binary: bool = False) -> Self | None:
         """Creates a new file from content."""
         if sync:
             logger.warn("Creating & Syncing non-source files are not supported. Ignoring sync...")
-        path = G.to_absolute(filepath)
+        path = ctx.to_absolute(filepath)
         if not path.exists():
             update_graph = True
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -122,7 +122,7 @@ class File(Editable[None]):
             else:
                 path.write_bytes(content)
 
-        new_file = cls(filepath, G, ts_node=None, binary=binary)
+        new_file = cls(filepath, ctx, ts_node=None, binary=binary)
         return new_file
 
     @property
@@ -168,7 +168,7 @@ class File(Editable[None]):
     @noapidoc
     def write_bytes(self, content_bytes: bytes, to_disk: bool = False) -> None:
         self._pending_content_bytes = content_bytes
-        self.G.pending_files.add(self)
+        self.ctx.pending_files.add(self)
         if to_disk:
             self.write_pending_content()
             if self.ts_node.start_byte == self.ts_node.end_byte:
@@ -235,17 +235,17 @@ class File(Editable[None]):
         Returns:
             set[str]: A set of Github usernames or team names that own this file. Empty if no CODEOWNERS file exists.
         """
-        if self.G.codeowners_parser:
-            # return get_filepath_owners(codeowners=self.G.codeowners_parser, filepath=self.file_path)
-            filename_owners = self.G.codeowners_parser.of(self.file_path)
+        if self.ctx.codeowners_parser:
+            # return get_filepath_owners(codeowners=self.ctx.codeowners_parser, filepath=self.file_path)
+            filename_owners = self.ctx.codeowners_parser.of(self.file_path)
             return {owner[1] for owner in filename_owners}
         return set()
 
     @cached_property
     @noapidoc
     def github_url(self) -> str | None:
-        if self.G.base_url:
-            return self.G.base_url + "/" + self.file_path
+        if self.ctx.base_url:
+            return self.ctx.base_url + "/" + self.file_path
 
     @property
     @reader
@@ -332,13 +332,13 @@ class File(Editable[None]):
         # =====[ Change the file on disk ]=====
         self.transaction_manager.add_file_rename_transaction(self, new_filepath)
 
-    def parse(self, G: "CodebaseGraph") -> None:
+    def parse(self, ctx: "CodebaseContext") -> None:
         """Parses the file representation into the graph.
 
         This method is called during file initialization to parse the file and build its graph representation within the codebase graph.
 
         Args:
-            G (CodebaseGraph): The codebase graph that the file belongs to.
+            ctx (CodebaseContext): The codebase context that the file belongs to.
 
         Returns:
             None
@@ -446,16 +446,16 @@ class SourceFile(
     code_block: TCodeBlock
     _nodes: list[Importable]
 
-    def __init__(self, ts_node: TSNode, filepath: PathLike, G: CodebaseGraph) -> None:
-        self.node_id = G.add_node(self)
+    def __init__(self, ts_node: TSNode, filepath: PathLike, ctx: CodebaseContext) -> None:
+        self.node_id = ctx.add_node(self)
         self._nodes = []
-        super().__init__(filepath, G, ts_node=ts_node)
+        super().__init__(filepath, ctx, ts_node=ts_node)
         self._nodes.clear()
-        self.G.filepath_idx[self.file_path] = self.node_id
+        self.ctx.filepath_idx[self.file_path] = self.node_id
         self._directory = None
         self._pending_imports = set()
         try:
-            self.parse(G)
+            self.parse(ctx)
         except RecursionError as e:
             logger.exception(f"RecursionError parsing file {filepath}: {e} at depth {sys.getrecursionlimit()} and {resource.getrlimit(resource.RLIMIT_STACK)}")
             raise e
@@ -472,7 +472,7 @@ class SourceFile(
 
     @noapidoc
     @commiter
-    def parse(self, G: CodebaseGraph) -> None:
+    def parse(self, ctx: CodebaseContext) -> None:
         self.__dict__.pop("_source", None)
         # Add self to the graph
         self.code_block = self._parse_code_block(self.ts_node)
@@ -525,18 +525,18 @@ class SourceFile(
 
         # Save any external import resolution edges to be re-resolved before removing the nodes
         for node_id in node_ids_to_remove:
-            external_edges_to_resolve.extend(self.G.predecessors(node_id))
+            external_edges_to_resolve.extend(self.ctx.predecessors(node_id))
 
         # Finally, remove the nodes
         for node_id in node_ids_to_remove:
             if reparse and node_id == self.node_id:
                 continue
-            if self.G.has_node(node_id):
-                self.G.remove_node(node_id)
+            if self.ctx.has_node(node_id):
+                self.ctx.remove_node(node_id)
         if not reparse:
-            self.G.filepath_idx.pop(self.file_path, None)
+            self.ctx.filepath_idx.pop(self.file_path, None)
         self._nodes.clear()
-        return list(filter(lambda node: self.G.has_node(node.node_id) and node is not None, external_edges_to_resolve))
+        return list(filter(lambda node: self.ctx.has_node(node.node_id) and node is not None, external_edges_to_resolve))
 
     @noapidoc
     @commiter
@@ -545,13 +545,13 @@ class SourceFile(
         self._pending_imports.clear()
         self.ts_node = parse_file(self.filepath, self.content)
         if self.node_id is None:
-            self.G.filepath_idx[self.file_path] = self.node_id
+            self.ctx.filepath_idx[self.file_path] = self.node_id
             self.file_node_id = self.node_id
         else:
-            assert self.G.has_node(self.node_id)
+            assert self.ctx.has_node(self.node_id)
         self.name = self.path.stem
         self._range_index.clear()
-        self.parse(self.G)
+        self.parse(self.ctx)
 
     @staticmethod
     @noapidoc
@@ -587,9 +587,9 @@ class SourceFile(
 
     @classmethod
     @noapidoc
-    def from_content(cls, filepath: str | PathLike | Path, content: str, G: CodebaseGraph, sync: bool = True, verify_syntax: bool = True) -> Self | None:
+    def from_content(cls, filepath: str | PathLike | Path, content: str, ctx: CodebaseContext, sync: bool = True, verify_syntax: bool = True) -> Self | None:
         """Creates a new file from content and adds it to the graph."""
-        path = G.to_absolute(filepath)
+        path = ctx.to_absolute(filepath)
         ts_node = parse_file(path, content)
         if ts_node.has_error and verify_syntax:
             logger.info("Failed to parse file %s", filepath)
@@ -602,19 +602,19 @@ class SourceFile(
             path.write_text(content)
 
         if update_graph and sync:
-            G.add_single_file(path)
-            return G.get_file(filepath)
+            ctx.add_single_file(path)
+            return ctx.get_file(filepath)
         else:
-            return cls(ts_node, Path(filepath), G)
+            return cls(ts_node, Path(filepath), ctx)
 
     @classmethod
     @noapidoc
-    def create_from_filepath(cls, filepath: str, G: CodebaseGraph) -> Self | None:
+    def create_from_filepath(cls, filepath: str, ctx: CodebaseContext) -> Self | None:
         """Makes a new empty file and adds it to the graph.
 
         Graph-safe.
         """
-        if filepath in G.filepath_idx:
+        if filepath in ctx.filepath_idx:
             msg = f"File already exists in graph: {filepath}"
             raise ValueError(msg)
 
@@ -623,7 +623,7 @@ class SourceFile(
             logger.info("Failed to parse file %s", filepath)
             raise SyntaxError
 
-        file = cls(ts_node, filepath, G)
+        file = cls(ts_node, filepath, ctx)
         file.write("", to_disk=True)
         return file
 
@@ -680,8 +680,8 @@ class SourceFile(
             list[TImport]: List of Import objects that import this file as a module,
                 sorted by file location.
         """
-        imps = [x for x in self.G.in_edges(self.node_id) if x[2].type == EdgeType.IMPORT_SYMBOL_RESOLUTION]
-        return sort_editables((self.G.get_node(x[0]) for x in imps), by_file=True, dedupe=False)
+        imps = [x for x in self.ctx.in_edges(self.node_id) if x[2].type == EdgeType.IMPORT_SYMBOL_RESOLUTION]
+        return sort_editables((self.ctx.get_node(x[0]) for x in imps), by_file=True, dedupe=False)
 
     @property
     @reader(cache=False)
@@ -783,7 +783,7 @@ class SourceFile(
         """
         ids = [x.node_id for x in self.symbols]
         # Create a subgraph based on G
-        subgraph = self.G.build_subgraph(ids)
+        subgraph = self.ctx.build_subgraph(ids)
         symbol_names = pseudo_topological_sort(subgraph)
         return [subgraph.get_node_data(x) for x in symbol_names]
 
@@ -915,12 +915,12 @@ class SourceFile(
         Returns:
             str: The module name used when importing this file.
         """
-        return self.get_import_module_name_for_file(self.filepath, self.G)
+        return self.get_import_module_name_for_file(self.filepath, self.ctx)
 
     @classmethod
     @abstractmethod
     @noapidoc
-    def get_import_module_name_for_file(cls, filepath: str, G: CodebaseGraph) -> str: ...
+    def get_import_module_name_for_file(cls, filepath: str, ctx: CodebaseContext) -> str: ...
 
     @abstractmethod
     def remove_unused_exports(self) -> None:
@@ -952,7 +952,7 @@ class SourceFile(
             None
         """
         # =====[ Add the new filepath as a new file node in the graph ]=====
-        new_file = self.G.node_classes.file_cls.from_content(new_filepath, self.content, self.G)
+        new_file = self.ctx.node_classes.file_cls.from_content(new_filepath, self.content, self.ctx)
         # =====[ Change the file on disk ]=====
         super().update_filepath(new_filepath)
         # =====[ Update all the inbound imports to point to the new module ]=====
