@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING, Generic, Self, TypeVar, Union
 
 from tree_sitter import Node as TSNode
 
+from codegen.sdk._proxy import proxy_property
 from codegen.sdk.core.autocommit import reader
 from codegen.sdk.core.dataclasses.usage import UsageType
 from codegen.sdk.core.expressions.expression import Expression
@@ -40,31 +41,40 @@ class Importable(Expression[Parent], HasName, Generic[Parent]):
         if self.file:
             self.file._nodes.append(self)
 
-    @property
+    @proxy_property
     @reader(cache=False)
-    def dependencies(self) -> list[Union["Symbol", "Import"]]:
+    def dependencies(self, usage_types: UsageType | None = UsageType.DIRECT, max_depth: int | None = None) -> list[Union["Symbol", "Import"]]:
         """Returns a list of symbols that this symbol depends on.
 
-        Returns a list of symbols (including imports) that this symbol directly depends on.
-        The returned list is sorted by file location for consistent ordering.
+        Args:
+            usage_types (UsageType | None): The types of dependencies to search for. Defaults to UsageType.DIRECT.
+            max_depth (int | None): Maximum depth to traverse in the dependency graph. If provided, will recursively collect
+                dependencies up to this depth. Defaults to None (only direct dependencies).
 
         Returns:
-            list[Union[Symbol, Import]]: A list of symbols and imports that this symbol directly depends on,
+            list[Union[Symbol, Import]]: A list of symbols and imports that this symbol depends on,
                 sorted by file location.
-        """
-        return self.get_dependencies(UsageType.DIRECT)
 
-    @reader(cache=False)
-    @noapidoc
-    def get_dependencies(self, usage_types: UsageType) -> list[Union["Symbol", "Import"]]:
-        """Returns Symbols and Importsthat this symbol depends on.
-
-        Opposite of `usages`
+        Note:
+            This method can be called as both a property or a method. If used as a property, it is equivalent to invoking it without arguments.
         """
+        # Get direct dependencies for this symbol and its descendants
         avoid = set(self.descendant_symbols)
         deps = []
         for symbol in self.descendant_symbols:
-            deps += filter(lambda x: x not in avoid, symbol._get_dependencies(usage_types))
+            deps.extend(filter(lambda x: x not in avoid, symbol._get_dependencies(usage_types)))
+
+        if max_depth is not None and max_depth > 1:
+            # For max_depth > 1, recursively collect dependencies
+            seen = set(deps)
+            for dep in list(deps):  # Create a copy of deps to iterate over
+                if isinstance(dep, Importable):
+                    next_deps = dep.dependencies(usage_types=usage_types, max_depth=max_depth - 1)
+                    for next_dep in next_deps:
+                        if next_dep not in seen:
+                            seen.add(next_dep)
+                            deps.append(next_dep)
+
         return sort_editables(deps, by_file=True)
 
     @reader(cache=False)
