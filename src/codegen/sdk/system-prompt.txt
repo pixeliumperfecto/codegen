@@ -1350,7 +1350,6 @@ Construct a Codebase by passing in a path to a local `git` repository or any sub
 
 ```python
 from codegen import Codebase
-from codegen.shared.enums.programming_language import ProgrammingLanguage
 
 # Parse from a git repository root
 codebase = Codebase("path/to/repository")
@@ -1362,12 +1361,12 @@ codebase = Codebase("path/to/repository/src/subfolder")
 codebase = Codebase("./")
 
 # Specify programming language (instead of inferring from file extensions)
-codebase = Codebase("./", programming_language=ProgrammingLanguage.TYPESCRIPT)
+codebase = Codebase("./", language="typescript")
 ```
 
 <Note>
   By default, Codegen will automatically infer the programming language of the codebase and
-  parse all files in the codebase. You can override this by passing the `programming_language` parameter
+  parse all files in the codebase. You can override this by passing the `language` parameter
   with a value from the `ProgrammingLanguage` enum.
 </Note>
 
@@ -1383,7 +1382,6 @@ To fetch and parse a repository directly from GitHub, use the `from_repo` functi
 
 ```python
 import codegen
-from codegen.shared.enums.programming_language import ProgrammingLanguage
 
 # Fetch and parse a repository (defaults to /tmp/codegen/{repo_name})
 codebase = codegen.from_repo('fastapi/fastapi')
@@ -1394,7 +1392,7 @@ codebase = codegen.from_repo(
     tmp_dir='/custom/temp/dir',  # Optional: custom temp directory
     commit='786a8ada7ed0c7f9d8b04d49f24596865e4b7901',  # Optional: specific commit
     shallow=False,  # Optional: full clone instead of shallow
-    programming_language=ProgrammingLanguage.PYTHON  # Optional: override language detection
+    language="python"  # Optional: override language detection
 )
 ```
 
@@ -1446,7 +1444,6 @@ from codegen import Codebase
 from codegen.git.repo_operator.local_repo_operator import LocalRepoOperator
 from codegen.git.schemas.repo_config import BaseRepoConfig
 from codegen.sdk.codebase.config import ProjectConfig
-from codegen.shared.enums.programming_language import ProgrammingLanguage
 
 codebase = Codebase(
     projects = [
@@ -1456,7 +1453,7 @@ codebase = Codebase(
                 repo_config=BaseRepoConfig(),
                 bot_commit=True
             ),
-            programming_language=ProgrammingLanguage.TYPESCRIPT,
+            language="typescript",
             base_path="src/codegen/sdk/typescript",
             subdirectories=["src/codegen/sdk/typescript"]
         )
@@ -6606,14 +6603,13 @@ First, we initialize the codebase and create a vector index for semantic search:
 ```python
 from codegen import Codebase
 from codegen.extensions import VectorIndex
-from codegen.shared.enums.programming_language import ProgrammingLanguage
 
 def initialize_codebase():
     """Initialize and index the codebase."""
     # Initialize codebase with smart caching
     codebase = Codebase.from_repo(
         "codegen-sh/codegen-sdk",
-        programming_language=ProgrammingLanguage.PYTHON,
+        language="python",
         tmp_dir="/root"
     )
 
@@ -6794,6 +6790,7 @@ While this example demonstrates a simple RAG-based bot, you can extend it to bui
     Understand RAG patterns and best practices for better results.
   </Card>
 </CardGroup>
+
 
 ---
 title: "Mining Training Data for LLMs"
@@ -10651,7 +10648,7 @@ from codegen.extensions.tools.semantic_search import semantic_search
 
 @mcp.tool('codebase_semantic_search', "search codebase with the provided query")
 def search(query: Annotated[str, "search query to run against codebase"]):
-  codebase = Codebase("provide location to codebase", programming_language="provide codebase Language")
+  codebase = Codebase("provide location to codebase", language="provide codebase Language")
   # use the semantic search tool from codegen.extensions.tools OR write your own
   results = semantic_search(codebase=codebase, query=query)
   return results
@@ -10671,6 +10668,7 @@ If you'd like to integrate this into an IDE checkout out this [setup guide](/int
 
 And that's a wrap, chime in at our [community
   Slack](https://community.codegen.com) if you have questions or ideas for additional MCP tools/capabilities
+
 
 ---
 title: "Neo4j Graph"
