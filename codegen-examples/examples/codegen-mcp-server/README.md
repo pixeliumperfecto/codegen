@@ -60,7 +60,7 @@ Here is an example mcp config that can be used with Cline or Claude desktop to i
 }
 ```
 
-###MCP Tools:
+### MCP Tools:
 
 - `parse_codebase`: Parses a codebase located at the provided path.
 - `check_parse_status`: Provides the current parsing status for the provided codebase.
