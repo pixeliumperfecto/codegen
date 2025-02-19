@@ -1,9 +1,10 @@
 """Demo implementation of an agent with Codegen tools."""
 
-from langchain.agents import AgentExecutor
+from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain.agents.openai_functions_agent.base import OpenAIFunctionsAgent
 from langchain.hub import pull
 from langchain.tools import BaseTool
+from langchain_anthropic import ChatAnthropic
 from langchain_core.chat_history import InMemoryChatMessageHistory
 from langchain_core.messages import BaseMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -29,7 +30,7 @@ from .tools import (
 
 def create_codebase_agent(
     codebase: Codebase,
-    model_name: str = "gpt-4o",
+    model_name: str = "claude-3-5-sonnet-latest",
     temperature: float = 0,
     verbose: bool = True,
     chat_history: list[BaseMessage] = [],
@@ -46,8 +47,13 @@ def create_codebase_agent(
         Initialized agent with message history
     """
     # Initialize language model
-    llm = ChatOpenAI(
-        model_name=model_name,
+    # llm = ChatOpenAI(
+    #     model_name=model_name,
+    #     temperature=temperature,
+    # )
+
+    llm = ChatAnthropic(
+        model="claude-3-5-sonnet-latest",
         temperature=temperature,
     )
 
@@ -64,7 +70,8 @@ def create_codebase_agent(
         RevealSymbolTool(codebase),
         SemanticEditTool(codebase),
         SemanticSearchTool(codebase),
-        # CommitTool(codebase),
+        # =====[ Github Integration ]=====
+        # Enable Github integration
         # GithubCreatePRTool(codebase),
         # GithubViewPRTool(codebase),
         # GithubCreatePRCommentTool(codebase),
@@ -128,7 +135,12 @@ def create_codebase_agent(
     )
 
     # Create the agent
-    agent = OpenAIFunctionsAgent(
+    # agent = OpenAIFunctionsAgent(
+    #     llm=llm,
+    #     tools=tools,
+    #     prompt=prompt,
+    # )
+    agent = create_tool_calling_agent(
         llm=llm,
         tools=tools,
         prompt=prompt,
