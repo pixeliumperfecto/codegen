@@ -33,8 +33,8 @@ LINEAR_TEAM_ID=your_team_id
 
 ## Usage
 
-1. uv sync
-1. uv run modal deploy app.py
+1. `uv sync`
+1. `uv run modal deploy app.py`
    - At this point you should have a modal app with an endpoint that is auto registered to linear as a webhook callback url.
 1. Try making a ticket and adding the `Codegen` label to trigger the agent
 
