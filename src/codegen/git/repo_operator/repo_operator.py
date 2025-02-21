@@ -735,7 +735,7 @@ class RepoOperator:
         commit_sha: str,
         path: str,
         line: int | None = None,
-        side: str | None = None,
+        side: str = "RIGHT",
         start_line: int | None = None,
     ) -> None:
         """Create an inline review comment on a specific line in a pull request.
@@ -760,7 +760,6 @@ class RepoOperator:
                     path=path,
                     line=line,
                     side=side,
-                    start_line=start_line,
                 )
 
     def get_pull_request(self, pr_number: int) -> PullRequest | None:
