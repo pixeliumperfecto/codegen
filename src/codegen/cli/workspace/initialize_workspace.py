@@ -108,18 +108,12 @@ def modify_gitignore(codegen_folder: Path):
         "codegen-system-prompt.txt",
         "",
         "# Python cache files",
-        "__pycache__/",
+        "**/__pycache__/",
         "*.py[cod]",
         "*$py.class",
         "*.txt",
         "*.pyc",
         "",
-        "# Keep codemods",
-        "!codemods/",
-        "!codemods/**",
-        "",
-        "# Explicitly ignore pycache in excluded codemod directory",
-        "codemods/**/__pycache__/",
     ]
 
     # Write or update .gitignore
