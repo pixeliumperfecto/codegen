@@ -4,6 +4,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from codegen.git.configs.constants import CODEGEN_BOT_EMAIL, CODEGEN_BOT_NAME
+from codegen.git.repo_operator.repo_operator import RepoOperator
+from codegen.git.schemas.enums import SetupOption
 from codegen.git.schemas.repo_config import RepoConfig
 from codegen.runner.enums.warmup_state import WarmupState
 from codegen.runner.models.apis import (
@@ -14,6 +16,7 @@ from codegen.runner.models.apis import (
 )
 from codegen.runner.models.codemod import Codemod, CodemodRunResult
 from codegen.runner.sandbox.runner import SandboxRunner
+from codegen.shared.logging.get_logger import get_logger
 
 # Configure logging at module level
 logging.basicConfig(
@@ -21,7 +24,7 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     force=True,
 )
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 server_info: ServerInfo
 runner: SandboxRunner
@@ -37,13 +40,14 @@ async def lifespan(server: FastAPI):
         server_info = ServerInfo(repo_name=repo_config.full_name or repo_config.name)
 
         # Set the bot email and username
+        op = RepoOperator(repo_config=repo_config, setup_option=SetupOption.SKIP, bot_commit=True)
+        runner = SandboxRunner(repo_config=repo_config, op=op)
         logger.info(f"Configuring git user config to {CODEGEN_BOT_EMAIL} and {CODEGEN_BOT_NAME}")
-        runner = SandboxRunner(repo_config=repo_config)
         runner.op.git_cli.git.config("user.email", CODEGEN_BOT_EMAIL)
         runner.op.git_cli.git.config("user.name", CODEGEN_BOT_NAME)
 
         # Parse the codebase
-        logger.info(f"Starting up sandbox fastapi server for repo_name={repo_config.name}")
+        logger.info(f"Starting up fastapi server for repo_name={repo_config.name}")
         server_info.warmup_state = WarmupState.PENDING
         await runner.warmup()
         server_info.synced_commit = runner.commit.hexsha
