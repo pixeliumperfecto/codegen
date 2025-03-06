@@ -8,7 +8,9 @@ from langchain_core.runnables.config import RunnableConfig
 from langsmith import Client
 
 from codegen.extensions.langchain.agent import create_codebase_agent
-from codegen.extensions.langchain.utils.get_langsmith_url import find_and_print_langsmith_run_url
+from codegen.extensions.langchain.utils.get_langsmith_url import (
+    find_and_print_langsmith_run_url,
+)
 
 if TYPE_CHECKING:
     from codegen import Codebase
@@ -16,6 +18,13 @@ if TYPE_CHECKING:
 
 class CodeAgent:
     """Agent for interacting with a codebase."""
+
+    codebase: "Codebase"
+    agent: any
+    langsmith_client: Client
+    project_name: str
+    thread_id: str | None = None
+    config: dict = {}
 
     def __init__(
         self,
@@ -43,7 +52,14 @@ class CodeAgent:
                 - max_tokens: Maximum number of tokens to generate
         """
         self.codebase = codebase
-        self.agent = create_codebase_agent(self.codebase, model_provider=model_provider, model_name=model_name, memory=memory, additional_tools=tools, **kwargs)
+        self.agent = create_codebase_agent(
+            self.codebase,
+            model_provider=model_provider,
+            model_name=model_name,
+            memory=memory,
+            additional_tools=tools,
+            **kwargs,
+        )
         self.langsmith_client = Client()
         self.run_id = run_id
         self.instance_id = instance_id
@@ -64,6 +80,14 @@ class CodeAgent:
         """
         if thread_id is None:
             thread_id = str(uuid4())
+        self.thread_id = thread_id
+        self.config = {
+            "configurable": {
+                "thread_id": thread_id,
+                "metadata": {"project": self.project_name},
+            },
+            "recursion_limit": 100,
+        }
 
         # this message has a reducer which appends the current message to the existing history
         # see more https://langchain-ai.github.io/langgraph/concepts/low_level/#reducers
@@ -134,3 +158,9 @@ class CodeAgent:
             print(traceback.format_exc())
             print(separator)
             return None
+
+    def get_tools(self) -> list[BaseTool]:
+        return list(self.agent.get_graph().nodes["tools"].data.tools_by_name.values())
+
+    def get_state(self) -> dict:
+        return self.agent.get_state(self.config)
