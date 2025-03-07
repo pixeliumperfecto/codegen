@@ -78,6 +78,7 @@ dependencies = [
   "datasets",
   "colorlog>=6.9.0",
   "langsmith",
+  "langchain-xai>=0.2.1",
 ]
 
 license = { text = "Apache-2.0" }
