@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING, Optional
 from uuid import uuid4
 
 from langchain.tools import BaseTool
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.runnables.config import RunnableConfig
 from langsmith import Client
 
@@ -94,8 +94,17 @@ class CodeAgent:
 
         # this message has a reducer which appends the current message to the existing history
         # see more https://langchain-ai.github.io/langgraph/concepts/low_level/#reducers
-        input = {"messages": [("user", prompt)]}
-        tags, metadata = self.get_tags_metadata()
+        input = {"query": prompt}
+        metadata = {"project": self.project_name}
+        tags = []
+        # Add SWEBench run ID and instance ID to the metadata and tags for filtering
+        if self.run_id is not None:
+            metadata["swebench_run_id"] = self.run_id
+            tags.append(self.run_id)
+
+        if self.instance_id is not None:
+            metadata["swebench_instance_id"] = self.instance_id
+            tags.append(self.instance_id)
 
         config = RunnableConfig(configurable={"thread_id": thread_id}, tags=tags, metadata=metadata, recursion_limit=100)
         # we stream the steps instead of invoke because it allows us to access intermediate nodes
@@ -105,7 +114,11 @@ class CodeAgent:
         run_ids = []
 
         for s in stream:
-            message = s["messages"][-1]
+            if len(s["messages"]) == 0:
+                message = HumanMessage(content=prompt)
+            else:
+                message = s["messages"][-1]
+
             if isinstance(message, tuple):
                 print(message)
             else:
@@ -119,7 +132,7 @@ class CodeAgent:
                     run_ids.append(message.additional_kwargs["run_id"])
 
         # Get the last message content
-        result = s["messages"][-1].content
+        result = s["final_answer"]
 
         # Try to find run IDs in the LangSmith client's recent runs
         try:
