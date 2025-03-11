@@ -110,7 +110,7 @@ class Class(Inherits[TType], HasBlock[TCodeBlock, TDecorator], Callable[TParamet
         return []
 
     @reader
-    def get_parent_class(self, parent_class_name: str, optional: bool = False) -> Editable | None:
+    def get_parent_class(self, parent_class_name: str) -> Editable | None:
         """Returns the parent class node with the specified name.
 
         Retrieves a parent class Name or ChainedAttribute node from this class's list of parent class names that matches
@@ -118,21 +118,11 @@ class Class(Inherits[TType], HasBlock[TCodeBlock, TDecorator], Callable[TParamet
 
         Args:
             parent_class_name (str): The name of the parent class to find.
-            optional (bool, optional): Whether to return None if the parent class is not found. Defaults to False.
 
         Returns:
             Editable | None: The matching parent class node, or None if no match is found.
         """
-        parent_class = [p for p in self.parent_class_names if p.source == parent_class_name]
-        if not parent_class:
-            if not optional:
-                msg = f"Parent class {parent_class_name} not found in class {self.name}. Use optional=True to return None instead."
-                raise ValueError(msg)
-            return None
-        if len(parent_class) > 1:
-            msg = f"Multiple parent classes found with name {parent_class_name} in class {self.name}."
-            raise ValueError(msg)
-        return parent_class[0]
+        return next((p for p in self.parent_class_names if p.source == parent_class_name), None)
 
     @property
     @reader
@@ -243,14 +233,13 @@ class Class(Inherits[TType], HasBlock[TCodeBlock, TDecorator], Callable[TParamet
         return list(result.values())
 
     @reader
-    def get_nested_class(self, name: str, optional: bool = False) -> Self | None:
+    def get_nested_class(self, name: str) -> Self | None:
         """Returns a nested class by name from the current class.
 
         Searches through the nested classes defined in the class and returns the first one that matches the given name.
 
         Args:
             name (str): The name of the nested class to find.
-            optional (bool, optional): Whether to return None if the nested class is not found. Defaults to False.
 
         Returns:
             Self | None: The nested class if found, None otherwise.
@@ -258,20 +247,16 @@ class Class(Inherits[TType], HasBlock[TCodeBlock, TDecorator], Callable[TParamet
         for m in self.nested_classes:
             if m.name == name:
                 return m
-        if not optional:
-            msg = f"Nested class {name} not found in class {self.name}. Use optional=True to return None instead."
-            raise ValueError(msg)
         return None
 
     @reader
-    def get_method(self, name: str, optional: bool = False) -> TFunction | None:
+    def get_method(self, name: str) -> TFunction | None:
         """Returns a specific method by name from the class or any of its superclasses.
 
         Searches through the class's methods and its superclasses' methods to find a method with the specified name.
 
         Args:
             name (str): The name of the method to find.
-            optional (bool, optional): Whether to return None if the method is not found. Defaults to False.
 
         Returns:
             TFunction | None: The method if found, None otherwise.
@@ -282,9 +267,6 @@ class Class(Inherits[TType], HasBlock[TCodeBlock, TDecorator], Callable[TParamet
                 for m in c.methods:
                     if m.name == name:
                         return m
-        if not optional:
-            msg = f"Method {name} not found in class {self.name}. Use optional=True to return None instead."
-            raise ValueError(msg)
         return None
 
     @proxy_property
@@ -311,14 +293,13 @@ class Class(Inherits[TType], HasBlock[TCodeBlock, TDecorator], Callable[TParamet
         return list(result.values())
 
     @reader
-    def get_attribute(self, name: str, optional: bool = False) -> Attribute | None:
+    def get_attribute(self, name: str) -> Attribute | None:
         """Returns a specific attribute by name.
 
         Searches for an attribute with the given name in the current class and its superclasses.
 
         Args:
             name (str): The name of the attribute to search for.
-            optional (bool, optional): Whether to return None if the attribute is not found. Defaults to False.
 
         Returns:
             Attribute | None: The matching attribute if found, None otherwise. If multiple attributes with the same name exist in the inheritance hierarchy, returns the first one found.
@@ -329,9 +310,6 @@ class Class(Inherits[TType], HasBlock[TCodeBlock, TDecorator], Callable[TParamet
                 for m in c.code_block.get_attributes(name):
                     if m.name == name:
                         return m
-        if not optional:
-            msg = f"Attribute {name} not found in class {self.name}. Use optional=True to return None instead."
-            raise ValueError(msg)
         return None
 
     ####################################################################################################################
