@@ -1091,14 +1091,15 @@ class SearchFilesByNameInput(BaseModel):
     """Input for searching files by name pattern."""
 
     pattern: str = Field(..., description="`fd`-compatible glob pattern to search for (e.g. '*.py', 'test_*.py')")
-
+    page: int = Field(default=1, description="Page number to return (1-based)")
+    files_per_page: int | float = Field(default=10, description="Number of files per page to return, use math.inf to return all files")
 
 class SearchFilesByNameTool(BaseTool):
     """Tool for searching files by filename across a codebase."""
 
     name: ClassVar[str] = "search_files_by_name"
     description: ClassVar[str] = """
-Search for files and directories by glob pattern across the active codebase. This is useful when you need to:
+Search for files and directories by glob pattern (with pagination) across the active codebase. This is useful when you need to:
 - Find specific file types (e.g., '*.py', '*.tsx')
 - Locate configuration files (e.g., 'package.json', 'requirements.txt')
 - Find files with specific names (e.g., 'README.md', 'Dockerfile')
@@ -1106,9 +1107,11 @@ Search for files and directories by glob pattern across the active codebase. Thi
     args_schema: ClassVar[type[BaseModel]] = SearchFilesByNameInput
     codebase: Codebase = Field(exclude=True)
 
+    
+
     def __init__(self, codebase: Codebase):
         super().__init__(codebase=codebase)
 
     def _run(self, pattern: str) -> str:
         """Execute the glob pattern search using fd."""
-        return search_files_by_name(self.codebase, pattern).render()
+        return search_files_by_name(self.codebase, pattern, page=self.page, files_per_page=self.files_per_page).render()
