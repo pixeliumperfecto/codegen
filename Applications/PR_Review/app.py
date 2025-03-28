@@ -15,6 +15,11 @@ from typing import Optional, Dict, List
 from helpers import review_pr, get_github_client
 from webhook_manager import WebhookManager
 from ngrok_manager import NgrokManager
+from codegen.extensions.events.github import GitHub
+from codegen.extensions.github.types.events.pull_request import PullRequestOpenedEvent
+from codegen.git.repo_operator.repo_operator import RepoOperator
+from codegen.configs.models.secrets import SecretsConfig
+from codegen.git.schemas.repo_config import RepoConfig
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -22,6 +27,9 @@ logger = getLogger(__name__)
 
 # Create FastAPI app
 app = FastAPI(title="PR Review Bot", description="A bot that reviews PRs against documentation")
+
+# Add GitHub event handler
+github_handler = GitHub(app)
 
 # Add CORS middleware
 app.add_middleware(
@@ -121,9 +129,82 @@ async def global_exception_handler(request: Request, exc: Exception):
         }
     )
 
+# Register GitHub event handlers
+@github_handler.event("pull_request:opened")
+def handle_pr_opened(event: PullRequestOpenedEvent):
+    """Handle pull request opened events"""
+    logger.info(f"Received pull request opened event: PR #{event.number}")
+    
+    try:
+        # Get repository information
+        repo_name = event.repository.full_name
+        pr_number = event.number
+        
+        # Process the PR
+        logger.info(f"Processing PR #{pr_number} in {repo_name}")
+        github_client = Github(os.environ.get("GITHUB_TOKEN", ""))
+        result = review_pr(github_client, repo_name, pr_number)
+        logger.info(f"PR review completed for #{pr_number} in {repo_name}")
+        return {"status": "success", "result": result}
+    except Exception as e:
+        logger.error(f"Error processing PR: {e}")
+        logger.error(traceback.format_exc())
+        return {
+            "status": "error", 
+            "message": f"Error processing PR: {str(e)}",
+            "pr_number": event.number,
+            "repo_name": event.repository.full_name
+        }
+
+@github_handler.event("pull_request:synchronize")
+def handle_pr_synchronize(event: dict):
+    """Handle pull request synchronize events (when PR is updated)"""
+    logger.info(f"Received pull request synchronize event: PR #{event['number']}")
+    
+    try:
+        # Get repository information
+        repo_name = event['repository']['full_name']
+        pr_number = event['number']
+        
+        # Process the PR
+        logger.info(f"Processing updated PR #{pr_number} in {repo_name}")
+        github_client = Github(os.environ.get("GITHUB_TOKEN", ""))
+        result = review_pr(github_client, repo_name, pr_number)
+        logger.info(f"PR review completed for updated #{pr_number} in {repo_name}")
+        return {"status": "success", "result": result}
+    except Exception as e:
+        logger.error(f"Error processing updated PR: {e}")
+        logger.error(traceback.format_exc())
+        return {
+            "status": "error", 
+            "message": f"Error processing updated PR: {str(e)}",
+            "pr_number": event['number'],
+            "repo_name": event['repository']['full_name']
+        }
+
+@github_handler.event("repository:created")
+def handle_repository_created(event: dict):
+    """Handle repository creation events"""
+    logger.info(f"Received repository created event")
+    
+    try:
+        repo_name = event['repository']['full_name']
+        logger.info(f"Setting up webhook for new repository: {repo_name}")
+        
+        config = get_config()
+        webhook_manager = get_webhook_manager(config)
+        success, message = webhook_manager.handle_repository_created(repo_name)
+        
+        logger.info(f"Webhook setup for new repository {repo_name}: {message}")
+        return {"status": "success" if success else "error", "message": message}
+    except Exception as e:
+        logger.error(f"Error handling repository creation: {e}")
+        logger.error(traceback.format_exc())
+        return {"status": "error", "message": f"Error handling repository creation: {str(e)}"}
+
 # GitHub webhook handler
 @app.post("/webhook")
-async def webhook(request: Request, config: Config = Depends(get_config)):
+async def webhook(request: Request):
     # Get the raw request body
     body = await request.body()
     
@@ -138,57 +219,18 @@ async def webhook(request: Request, config: Config = Depends(get_config)):
     event_type = request.headers.get("X-GitHub-Event")
     logger.info(f"Received webhook event: {event_type}")
     
-    # Handle repository creation event
-    if event_type == "repository":
-        action = payload.get("action")
-        if action == "created":
-            repo_name = payload.get("repository", {}).get("full_name")
-            if repo_name:
-                webhook_manager = get_webhook_manager(config)
-                success, message = webhook_manager.handle_repository_created(repo_name)
-                return {"status": "success" if success else "error", "message": message}
-    
-    # Handle pull request event
-    if event_type == "pull_request":
-        # Check if this is a relevant action
-        action = payload.get("action")
-        if action not in ["opened", "synchronize", "reopened"]:
-            logger.info(f"Ignoring PR action: {action}")
-            return {"status": "ignored", "reason": f"Ignoring PR action: {action}"}
-        
-        # Get repository information
-        repo_name = payload.get("repository", {}).get("full_name")
-        if not repo_name:
-            logger.error("Missing repository information")
-            raise HTTPException(status_code=400, detail="Missing repository information")
-        
-        # Get PR information
-        pr_number = payload.get("pull_request", {}).get("number")
-        if not pr_number:
-            logger.error("Missing PR number")
-            raise HTTPException(status_code=400, detail="Missing PR number")
-        
-        # Process the PR
-        try:
-            logger.info(f"Processing PR #{pr_number} in {repo_name}")
-            github_client = get_github_client(config.github_token)
-            result = review_pr(github_client, repo_name, pr_number)
-            logger.info(f"PR review completed for #{pr_number} in {repo_name}")
-            return {"status": "success", "result": result}
-        except Exception as e:
-            logger.error(f"Error processing PR: {e}")
-            logger.error(traceback.format_exc())
-            # Return a 200 response to GitHub to acknowledge receipt
-            # This prevents GitHub from retrying the webhook
-            return {
-                "status": "error", 
-                "message": f"Error processing PR: {str(e)}",
-                "pr_number": pr_number,
-                "repo_name": repo_name
-            }
-    
-    # Return for other event types
-    return {"status": "ignored", "reason": f"Ignored event type: {event_type}"}
+    # Process the event using GitHub handler
+    try:
+        return await github_handler.handle(payload, request)
+    except Exception as e:
+        logger.error(f"Error processing webhook: {e}")
+        logger.error(traceback.format_exc())
+        # Return a 200 response to GitHub to acknowledge receipt
+        # This prevents GitHub from retrying the webhook
+        return {
+            "status": "error", 
+            "message": f"Error processing webhook: {str(e)}"
+        }
 
 # Health check endpoint
 @app.get("/health")

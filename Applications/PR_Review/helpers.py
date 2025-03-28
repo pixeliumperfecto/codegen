@@ -12,6 +12,13 @@ import markdown
 from bs4 import BeautifulSoup
 from codegen import Codebase, CodeAgent
 from codegen.configs.models.secrets import SecretsConfig
+from codegen.git.repo_operator.repo_operator import RepoOperator
+from codegen.git.schemas.repo_config import RepoConfig
+from codegen.extensions.langchain.tools import (
+    GithubViewPRTool,
+    GithubCreatePRCommentTool,
+    GithubCreatePRReviewCommentTool,
+)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -147,9 +154,16 @@ def analyze_with_codegen(pr: PullRequest, docs_content: str) -> Dict[str, Any]:
             secrets=SecretsConfig(github_token=os.environ["GITHUB_TOKEN"])
         )
         
-        # Create agent
-        logger.info("Creating CodeAgent")
-        agent = CodeAgent(codebase=codebase)
+        # Define PR review tools
+        pr_tools = [
+            GithubViewPRTool(codebase),
+            GithubCreatePRCommentTool(codebase),
+            GithubCreatePRReviewCommentTool(codebase),
+        ]
+        
+        # Create agent with tools
+        logger.info("Creating CodeAgent with PR review tools")
+        agent = CodeAgent(codebase=codebase, tools=pr_tools)
         
         # Prepare prompt for analysis
         prompt = f"""
@@ -170,7 +184,12 @@ def analyze_with_codegen(pr: PullRequest, docs_content: str) -> Dict[str, Any]:
         3. Provide specific suggestions for improvement if needed
         4. Determine if the PR should be approved or needs changes
         
-        Format your response as a JSON object with the following structure:
+        Use the tools available to you to:
+        1. View the PR details and changes
+        2. Leave comments on specific lines of code if needed
+        3. Provide a comprehensive review
+        
+        Format your final response as a JSON object with the following structure:
         {{
             "compliant": true/false,
             "issues": ["issue1", "issue2", ...],

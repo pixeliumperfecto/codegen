@@ -1,45 +1,23 @@
 # PR Review Bot
 
-## Core Functionality
+A bot that automatically reviews pull requests against documentation in the repository's root directory.
 
-- Monitor all incoming PRs to any GitHub repository
-- Review PRs against documentation in root directory (.md files)
-- Auto-approve PRs that comply with documentation
-- Suggest changes for non-compliant PRs
+## Features
 
-## Technical Requirements
+- **Locally hosted** FastAPI server (not Modal cloud service)
+- **Webhook support** for immediate PR reviews
+- **GitHub API integration** using Personal Access Token
+- **Markdown analysis** of root directory documentation files
+- **Intelligent PR review** using Codegen
+- **Auto-approval** for compliant PRs
+- **Dynamic webhook management** for all repositories
+- **Automatic ngrok integration** for local development
 
-- Locally hosted (not Modal cloud service)
-- Support for webhook mode
-- Authentication via GitHub Personal Access Token
-- Analyze PRs against README.md and other root-level .md files
-- Python-based implementation using FastAPI
+## Requirements
 
-## Implementation Details
-
-- GitHub API integration for PR monitoring and interaction
-- Codegen integration for intelligent PR review
-- Root directory markdown file analysis
-- Automated commenting and approvals
-- Dynamic webhook management for all repositories
-- Automatic ngrok integration for local development
-- Robust error handling and logging
-
-## Configuration Options
-
-- Webhook support for immediate reviews
-- Port configuration for local server
-- Automatic webhook setup for all repositories
-- Built-in ngrok integration for local development
-
-## User Experience
-
-- Clear logs of PR review process
-- Detailed comments on PR issues
-- Auto-approval for compliant PRs
-- Automatic webhook management
-- One-command setup with automatic ngrok tunneling
-- Graceful error handling with detailed logs
+- Python 3.10 or higher
+- GitHub Personal Access Token with `repo` and `admin:repo_hook` scopes
+- ngrok account (free tier works) for local development
 
 ## Installation
 
@@ -49,195 +27,86 @@
    cd codegen/Applications/PR_Review
    ```
 
-2. Set up a virtual environment:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-
-3. Install dependencies:
+2. Install the package:
    ```bash
    pip install -e .
    ```
 
-4. Create a `.env` file based on the template:
-   ```bash
-   cp .env.template .env
+3. Create a `.env` file with your GitHub token and ngrok auth token:
    ```
-
-5. Edit the `.env` file with your configuration:
-   ```
-   # GitHub Configuration
-   GITHUB_TOKEN="your_github_token_here"
-   
-   # Server Configuration
+   GITHUB_TOKEN=your_github_token_here
+   NGROK_AUTH_TOKEN=your_ngrok_auth_token_here
+   USE_NGROK=true
    PORT=8000
-   
-   # Ngrok Configuration
-   USE_NGROK="true"
-   NGROK_AUTH_TOKEN="your_ngrok_auth_token_here"
-   
-   # Codegen Configuration
-   ANTHROPIC_API_KEY="your_anthropic_api_key_here"
-   OPENAI_API_KEY="your_openai_api_key_here"
    ```
-
-## GitHub Token Setup
-
-The PR Review Bot requires a GitHub Personal Access Token with specific permissions to create and manage webhooks:
-
-1. Go to your GitHub account settings: https://github.com/settings/tokens
-2. Click "Generate new token" (classic)
-3. Give your token a descriptive name (e.g., "PR Review Bot")
-4. Select the following scopes:
-   - `repo` (Full control of private repositories)
-   - `admin:repo_hook` (Full control of repository hooks)
-5. Click "Generate token"
-6. Copy the token and add it to your `.env` file as `GITHUB_TOKEN`
-
-**Important**: The token must have `admin:repo_hook` scope to create webhooks. If you see permission errors when running the bot, check that your token has the correct scopes.
 
 ## Usage
 
-### Starting the Server
-
-Run the server with a single command:
-
-```bash
-python app.py
-```
-
-The server will:
-1. Check if your GitHub token is valid and has the necessary permissions
-2. Automatically start ngrok to create a public URL (if USE_NGROK=true)
-3. Set up webhooks for all repositories accessible by your GitHub token
-4. Update any existing webhooks to use the new ngrok URL
-5. Print the status of each repository's webhook setup
-6. Start the FastAPI server on the configured port
-
-### Automatic ngrok Integration
-
-The PR Review Bot now includes built-in ngrok integration:
-
-1. When you start the bot with `USE_NGROK="true"` in your `.env` file:
-   - The bot automatically starts ngrok to create a tunnel to your local server
-   - It retrieves the public URL from ngrok
-   - It uses this URL to create or update webhooks for all repositories
-   - No manual ngrok setup required!
-
-2. Each time you restart the bot:
-   - A new ngrok tunnel is created (with a new URL)
-   - All repository webhooks are automatically updated to use the new URL
-   - This ensures webhooks always point to your current ngrok URL
-
-3. For better stability, set your ngrok authentication token:
-   - Get your token from: https://dashboard.ngrok.com/get-started/your-authtoken
-   - Add it to your `.env` file: `NGROK_AUTH_TOKEN="your_token_here"`
-   - This allows for longer sessions and more reliable connections
-
-4. If you prefer to manage ngrok manually:
-   - Set `USE_NGROK="false"` in your `.env` file
-   - Set `WEBHOOK_URL="your-public-url/webhook"` with your manually created URL
-
-### Manual Public URL Setup (Alternative)
-
-If you prefer not to use the automatic ngrok integration, you can set up a public URL manually:
-
-#### Option 1: Manual ngrok Setup
-
-1. Install ngrok: `pip install pyngrok` or download from [ngrok.com](https://ngrok.com/)
-2. In a separate terminal, run: `ngrok http 8000`
-3. ngrok will provide a public URL (like `https://abc123.ngrok.io`)
-4. Set `USE_NGROK="false"` in your `.env` file
-5. Set `WEBHOOK_URL="https://abc123.ngrok.io/webhook"` in your `.env` file
-6. Start the PR Review Bot: `python app.py`
-
-#### Option 2: Deploy to a Public Server (Recommended for Production)
-
-For a production environment, deploy your FastAPI app to a server with a public IP:
-- Cloud providers (AWS, Azure, GCP)
-- PaaS solutions (Heroku, Render, Railway)
-- Your own server with a public IP
-
-### Troubleshooting Webhook Issues
-
-If you see errors like "Failed to create webhook for repository/name", check the following:
-
-1. **GitHub Token Permissions**: Make sure your token has the `admin:repo_hook` scope
-2. **Webhook URL Accessibility**: Your webhook URL must be publicly accessible from the internet
-   - Local IP addresses (127.0.0.1, 192.168.x.x, etc.) won't work
-   - Use the built-in ngrok integration or a similar service to expose your local server
-3. **Repository Permissions**: You must have admin access to the repository to create webhooks
-4. **ngrok Installation**: If using automatic ngrok integration, make sure ngrok is installed
-   - Install with: `pip install pyngrok`
-
-### Troubleshooting PR Review Issues
-
-If you encounter errors during PR review, the bot now includes improved error handling:
-
-1. **Webhook 500 Errors**: The bot now gracefully handles errors during webhook processing
-   - Errors are logged with detailed stack traces for debugging
-   - GitHub receives a successful response to prevent webhook retries
-   - The error details are included in the response for troubleshooting
-
-2. **Codegen Integration Issues**: If there are problems with the Codegen analysis
-   - The bot will catch and log the specific error
-   - It will still provide a meaningful response to GitHub
-   - The PR will receive a comment explaining that manual review is needed
-
-3. **GitHub API Rate Limits**: If you hit GitHub API rate limits
-   - The error will be clearly logged with details
-   - The bot will continue running and process new requests when limits reset
-
-4. **Viewing Logs**: Check the console output for detailed error logs
-   - All errors include stack traces to help identify the root cause
-   - Critical errors are highlighted in the console output
-
-### Automatic Webhook Management
-
-The PR Review Bot automatically manages webhooks for all repositories accessible by your GitHub token:
-
-1. On startup, it will:
-   - Fetch all repositories accessible by your token
-   - Check if each repository has a webhook for PR reviews
-   - Create webhooks for repositories that don't have one
-   - Update webhook URLs for repositories with outdated URLs
-   - Print the status of each repository's webhook setup
-
-2. You can also manually trigger webhook setup:
-   ```
-   POST /setup-webhooks
+1. Start the bot:
+   ```bash
+   python app.py
    ```
 
-3. Check webhook status:
+2. The bot will:
+   - Start a local server
+   - Start an ngrok tunnel to expose your local server
+   - Set up webhooks for all repositories accessible by your GitHub token
+   - Begin reviewing PRs as they are opened or updated
+
+3. You can also manually trigger a review:
    ```
-   GET /webhook-status
+   curl -X POST http://localhost:8000/review/{owner}/{repo}/{pr_number}
    ```
-
-4. When new repositories are created, the bot will automatically add webhooks to them and print the status.
-
-### Manual PR Review
-
-You can also trigger a review manually by making a POST request to:
-
-```
-POST /review/{repo_owner}/{repo_name}/{pr_number}
-```
-
-Example using curl:
-
-```bash
-curl -X POST http://localhost:8000/review/pixeliumperfecto/codegen/123
-```
 
 ## How It Works
 
-1. **Automatic Setup**: The bot starts ngrok and sets up webhooks with a single command
-2. **Webhook Management**: It automatically sets up and maintains webhooks for all repositories
-3. **Webhook Reception**: It receives webhook events from GitHub when PRs are opened or updated
-4. **Documentation Analysis**: It extracts content from all markdown files in the repository's root directory
-5. **PR Analysis**: Using Codegen, it analyzes the PR against the documentation requirements
-6. **Review Generation**: It generates a detailed review with specific issues and suggestions
-7. **GitHub Integration**: It posts comments and formal reviews on the PR
-8. **Auto-Approval**: If the PR complies with documentation, it automatically approves it
-9. **Error Handling**: Robust error handling ensures the bot continues to function even when issues occur
+1. **Webhook Setup**: The bot automatically sets up webhooks for all repositories accessible by your GitHub token.
+
+2. **PR Review Process**:
+   - When a PR is opened or updated, GitHub sends a webhook event to the bot
+   - The bot analyzes the PR against documentation in the repository's root directory
+   - It checks if the PR complies with the documentation requirements
+   - It posts a review comment with issues and suggestions
+   - It approves the PR if it complies, or requests changes if it doesn't
+
+3. **Codegen Integration**:
+   - The bot uses Codegen's AI capabilities to analyze PRs
+   - It leverages Codegen's GitHub tools for PR interaction
+   - It provides detailed, context-aware reviews
+
+## Ngrok Authentication Setup
+
+1. Sign up for a free ngrok account at https://dashboard.ngrok.com/signup
+2. Get your authtoken from https://dashboard.ngrok.com/get-started/your-authtoken
+3. Add it to your `.env` file as `NGROK_AUTH_TOKEN=your_token_here`
+
+## Troubleshooting
+
+### Webhook Issues
+
+- **Webhook creation fails**: Make sure your GitHub token has the `admin:repo_hook` scope
+- **Webhook not receiving events**: Check that your ngrok tunnel is running and accessible
+- **500 errors in webhook logs**: Check the bot's logs for detailed error information
+
+### Ngrok Issues
+
+- **Ngrok fails to start**: Make sure you've set your auth token in the `.env` file
+- **Ngrok URL changes**: The bot automatically updates webhook URLs when ngrok restarts
+- **Ngrok connection errors**: Check your internet connection and firewall settings
+
+## Advanced Configuration
+
+You can customize the bot's behavior by modifying the following files:
+
+- `app.py`: Main application logic and webhook handling
+- `helpers.py`: PR review logic and Codegen integration
+- `webhook_manager.py`: GitHub webhook management
+- `ngrok_manager.py`: ngrok tunnel management
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
