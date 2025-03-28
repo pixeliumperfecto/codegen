@@ -7,7 +7,7 @@ import uvicorn
 from github import Github
 from pydantic import BaseModel, Field
 import json
-from typing import List, Optional
+from typing import Optional
 from helpers import review_pr, get_github_client
 
 # Configure logging
@@ -29,7 +29,6 @@ app.add_middleware(
 # Configuration model
 class Config(BaseModel):
     github_token: str = Field(..., description="GitHub Personal Access Token")
-    repositories: List[str] = Field(..., description="List of repositories to monitor (format: owner/repo)")
     port: int = Field(8000, description="Port for the local server")
     webhook_secret: Optional[str] = Field(None, description="Secret for GitHub webhook validation")
 
@@ -44,7 +43,6 @@ def get_config():
             # Use environment variables as fallback
             return Config(
                 github_token=os.environ["GITHUB_TOKEN"],
-                repositories=os.environ["GITHUB_REPOSITORIES"].split(","),
                 port=int(os.environ.get("PORT", 8000)),
                 webhook_secret=os.environ.get("WEBHOOK_SECRET")
             )
@@ -92,11 +90,6 @@ async def webhook(request: Request, config: Config = Depends(get_config)):
         logger.error("Missing repository information")
         raise HTTPException(status_code=400, detail="Missing repository information")
     
-    # Check if this repository is in our monitored list
-    if repo_name not in config.repositories:
-        logger.info(f"Ignoring PR from unmonitored repository: {repo_name}")
-        return {"status": "ignored", "reason": "Repository not monitored"}
-    
     # Get PR information
     pr_number = payload.get("pull_request", {}).get("number")
     if not pr_number:
@@ -127,10 +120,6 @@ async def manual_review(
 ):
     repo_full_name = f"{repo_owner}/{repo_name}"
     
-    # Check if this repository is in our monitored list
-    if repo_full_name not in config.repositories:
-        logger.warning(f"Manual review requested for unmonitored repository: {repo_full_name}")
-    
     # Process the PR
     try:
         github_client = get_github_client(config.github_token)
@@ -144,5 +133,4 @@ async def manual_review(
 if __name__ == "__main__":
     config = get_config()
     logger.info(f"Starting PR Review Bot on port {config.port}")
-    logger.info(f"Monitoring repositories: {', '.join(config.repositories)}")
     uvicorn.run(app, host="0.0.0.0", port=config.port)
