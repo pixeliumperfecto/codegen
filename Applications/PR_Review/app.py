@@ -12,6 +12,7 @@ import json
 from typing import Optional, Dict, List
 from helpers import review_pr, get_github_client
 from webhook_manager import WebhookManager
+from ngrok_manager import NgrokManager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -34,6 +35,7 @@ class Config(BaseModel):
     github_token: str = Field(..., description="GitHub Personal Access Token")
     port: int = Field(8000, description="Port for the local server")
     webhook_url: Optional[str] = Field(None, description="URL for the webhook endpoint")
+    use_ngrok: bool = Field(True, description="Whether to use ngrok for exposing the server")
 
 # Load configuration
 def get_config():
@@ -47,11 +49,16 @@ def get_config():
             return Config(
                 github_token=os.environ.get("GITHUB_TOKEN", ""),
                 port=int(os.environ.get("PORT", 8000)),
-                webhook_url=os.environ.get("WEBHOOK_URL")
+                webhook_url=os.environ.get("WEBHOOK_URL"),
+                use_ngrok=os.environ.get("USE_NGROK", "true").lower() == "true"
             )
     except Exception as e:
         logger.error(f"Failed to load configuration: {e}")
         raise HTTPException(status_code=500, detail="Failed to load configuration")
+
+# Global variables for ngrok
+ngrok_manager = None
+webhook_url_override = None
 
 def is_url_accessible(url: str) -> bool:
     """Check if a URL is publicly accessible"""
@@ -63,13 +70,17 @@ def is_url_accessible(url: str) -> bool:
 
 # Get webhook manager
 def get_webhook_manager(config: Config = Depends(get_config)):
+    global webhook_url_override
+    
     if not config.github_token:
         print("ERROR: GitHub token not provided. Please set the GITHUB_TOKEN environment variable.")
         print("Make sure your token has 'admin:repo_hook' scope to create webhooks.")
         raise HTTPException(status_code=500, detail="GitHub token not provided")
         
     github_client = get_github_client(config.github_token)
-    webhook_url = config.webhook_url
+    
+    # Use the override URL if available (from ngrok)
+    webhook_url = webhook_url_override or config.webhook_url
     
     if not webhook_url:
         # Try to determine webhook URL from hostname
@@ -82,11 +93,7 @@ def get_webhook_manager(config: Config = Depends(get_config)):
         if ip.startswith(("127.", "10.", "172.", "192.168.")):
             print("\n⚠️ WARNING: Using a local IP address for webhook URL.")
             print("GitHub webhooks require a publicly accessible URL.")
-            print("Consider using ngrok to expose your local server:")
-            print("1. Install ngrok: pip install pyngrok or download from ngrok.com")
-            print("2. Run: ngrok http 8000")
-            print("3. Set WEBHOOK_URL environment variable to the ngrok URL + /webhook")
-            print("   Example: export WEBHOOK_URL=https://abc123.ngrok.io/webhook\n")
+            print("Consider enabling ngrok by setting USE_NGROK=true in your environment.")
     else:
         # Check if webhook URL is accessible
         if not is_url_accessible(webhook_url):
@@ -128,7 +135,7 @@ async def webhook(request: Request, config: Config = Depends(get_config)):
         action = payload.get("action")
         if action not in ["opened", "synchronize", "reopened"]:
             logger.info(f"Ignoring PR action: {action}")
-            return {"status": "ignored", "reason": f"Ignored PR action: {action}"}
+            return {"status": "ignored", "reason": f"Ignoring PR action: {action}"}
         
         # Get repository information
         repo_name = payload.get("repository", {}).get("full_name")
@@ -242,14 +249,38 @@ if __name__ == "__main__":
         exit(1)
     
     print("\n🤖 Starting PR Review Bot")
-    print(f"Server will run on: http://0.0.0.0:{config.port}")
+    
+    # Start ngrok if enabled
+    if config.use_ngrok and not config.webhook_url:
+        print("\n🔄 Starting ngrok tunnel...")
+        ngrok_manager = NgrokManager(config.port)
+        webhook_url_override = ngrok_manager.start_tunnel()
+        
+        if not webhook_url_override:
+            print("\n⚠️ WARNING: Failed to start ngrok tunnel.")
+            print("The bot will continue to run, but webhooks may not work correctly.")
+            print("Consider setting WEBHOOK_URL manually or fixing ngrok installation.\n")
+    
+    print(f"\n🌐 Server will run on: http://0.0.0.0:{config.port}")
     
     # Setup webhooks on startup
-    webhook_manager = get_webhook_manager(config)
-    print("\n🔗 Setting up webhooks for all repositories...")
-    results = webhook_manager.setup_webhooks_for_all_repos()
-    print(f"\n✅ Webhook setup completed for {len(results)} repositories")
+    if webhook_url_override or config.webhook_url:
+        webhook_manager = get_webhook_manager(config)
+        print("\n🔗 Setting up webhooks for all repositories...")
+        results = webhook_manager.setup_webhooks_for_all_repos()
+        print(f"\n✅ Webhook setup completed for {len(results)} repositories")
+    else:
+        print("\n⚠️ No webhook URL available. Skipping webhook setup.")
+        print("The bot will still respond to manual requests, but won't receive GitHub events.")
     
     # Start the server
     print("\n🚀 Starting server...")
+    
+    # Register shutdown event to stop ngrok
+    def shutdown_event():
+        if ngrok_manager:
+            print("\n🛑 Stopping ngrok tunnel...")
+            ngrok_manager.stop_tunnel()
+    
+    # Start uvicorn with shutdown event
     uvicorn.run(app, host="0.0.0.0", port=config.port)

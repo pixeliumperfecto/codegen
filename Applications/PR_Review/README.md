@@ -22,13 +22,14 @@
 - Root directory markdown file analysis
 - Automated commenting and approvals
 - Dynamic webhook management for all repositories
+- Automatic ngrok integration for local development
 
 ## Configuration Options
 
 - Webhook support for immediate reviews
 - Port configuration for local server
 - Automatic webhook setup for all repositories
-- Support for ngrok and other tunneling services
+- Built-in ngrok integration for local development
 
 ## User Experience
 
@@ -36,6 +37,7 @@
 - Detailed comments on PR issues
 - Auto-approval for compliant PRs
 - Automatic webhook management
+- One-command setup with automatic ngrok tunneling
 
 ## Installation
 
@@ -68,7 +70,9 @@
    
    # Server Configuration
    PORT=8000
-   WEBHOOK_URL="https://your-public-url.ngrok.io/webhook"
+   
+   # Ngrok Configuration
+   USE_NGROK="true"
    
    # Codegen Configuration
    ANTHROPIC_API_KEY="your_anthropic_api_key_here"
@@ -94,7 +98,7 @@ The PR Review Bot requires a GitHub Personal Access Token with specific permissi
 
 ### Starting the Server
 
-Run the server locally:
+Run the server with a single command:
 
 ```bash
 python app.py
@@ -102,26 +106,43 @@ python app.py
 
 The server will:
 1. Check if your GitHub token is valid and has the necessary permissions
-2. Detect or use the configured webhook URL
+2. Automatically start ngrok to create a public URL (if USE_NGROK=true)
 3. Set up webhooks for all repositories accessible by your GitHub token
-4. Print the status of each repository's webhook setup
-5. Start the FastAPI server on the configured port
+4. Update any existing webhooks to use the new ngrok URL
+5. Print the status of each repository's webhook setup
+6. Start the FastAPI server on the configured port
 
-### Making Your Server Publicly Accessible
+### Automatic ngrok Integration
 
-GitHub webhooks require a publicly accessible URL. Here are some options:
+The PR Review Bot now includes built-in ngrok integration:
 
-#### Option 1: ngrok (Recommended for Development/Testing)
+1. When you start the bot with `USE_NGROK="true"` in your `.env` file:
+   - The bot automatically starts ngrok to create a tunnel to your local server
+   - It retrieves the public URL from ngrok
+   - It uses this URL to create or update webhooks for all repositories
+   - No manual ngrok setup required!
 
-[ngrok](https://ngrok.com/) creates a secure tunnel to your local server:
+2. Each time you restart the bot:
+   - A new ngrok tunnel is created (with a new URL)
+   - All repository webhooks are automatically updated to use the new URL
+   - This ensures webhooks always point to your current ngrok URL
+
+3. If you prefer to manage ngrok manually:
+   - Set `USE_NGROK="false"` in your `.env` file
+   - Set `WEBHOOK_URL="your-public-url/webhook"` with your manually created URL
+
+### Manual Public URL Setup (Alternative)
+
+If you prefer not to use the automatic ngrok integration, you can set up a public URL manually:
+
+#### Option 1: Manual ngrok Setup
 
 1. Install ngrok: `pip install pyngrok` or download from [ngrok.com](https://ngrok.com/)
 2. In a separate terminal, run: `ngrok http 8000`
 3. ngrok will provide a public URL (like `https://abc123.ngrok.io`)
-4. Set this URL in your `.env` file: `WEBHOOK_URL="https://abc123.ngrok.io/webhook"`
-5. Start the PR Review Bot: `python app.py`
-
-**Note**: Each time you restart ngrok, it will generate a new URL. The PR Review Bot will automatically update all webhook URLs when you restart it with the new ngrok URL.
+4. Set `USE_NGROK="false"` in your `.env` file
+5. Set `WEBHOOK_URL="https://abc123.ngrok.io/webhook"` in your `.env` file
+6. Start the PR Review Bot: `python app.py`
 
 #### Option 2: Deploy to a Public Server (Recommended for Production)
 
@@ -137,8 +158,10 @@ If you see errors like "Failed to create webhook for repository/name", check the
 1. **GitHub Token Permissions**: Make sure your token has the `admin:repo_hook` scope
 2. **Webhook URL Accessibility**: Your webhook URL must be publicly accessible from the internet
    - Local IP addresses (127.0.0.1, 192.168.x.x, etc.) won't work
-   - Use ngrok or a similar service to expose your local server
+   - Use the built-in ngrok integration or a similar service to expose your local server
 3. **Repository Permissions**: You must have admin access to the repository to create webhooks
+4. **ngrok Installation**: If using automatic ngrok integration, make sure ngrok is installed
+   - Install with: `pip install pyngrok`
 
 ### Automatic Webhook Management
 
@@ -179,10 +202,11 @@ curl -X POST http://localhost:8000/review/pixeliumperfecto/codegen/123
 
 ## How It Works
 
-1. **Webhook Management**: The bot automatically sets up and maintains webhooks for all repositories
-2. **Webhook Reception**: It receives webhook events from GitHub when PRs are opened or updated
-3. **Documentation Analysis**: It extracts content from all markdown files in the repository's root directory
-4. **PR Analysis**: Using Codegen, it analyzes the PR against the documentation requirements
-5. **Review Generation**: It generates a detailed review with specific issues and suggestions
-6. **GitHub Integration**: It posts comments and formal reviews on the PR
-7. **Auto-Approval**: If the PR complies with documentation, it automatically approves it
+1. **Automatic Setup**: The bot starts ngrok and sets up webhooks with a single command
+2. **Webhook Management**: It automatically sets up and maintains webhooks for all repositories
+3. **Webhook Reception**: It receives webhook events from GitHub when PRs are opened or updated
+4. **Documentation Analysis**: It extracts content from all markdown files in the repository's root directory
+5. **PR Analysis**: Using Codegen, it analyzes the PR against the documentation requirements
+6. **Review Generation**: It generates a detailed review with specific issues and suggestions
+7. **GitHub Integration**: It posts comments and formal reviews on the PR
+8. **Auto-Approval**: If the PR complies with documentation, it automatically approves it
