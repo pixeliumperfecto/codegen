@@ -36,6 +36,7 @@ class Config(BaseModel):
     port: int = Field(8000, description="Port for the local server")
     webhook_url: Optional[str] = Field(None, description="URL for the webhook endpoint")
     use_ngrok: bool = Field(True, description="Whether to use ngrok for exposing the server")
+    ngrok_auth_token: Optional[str] = Field(None, description="Ngrok authentication token")
 
 # Load configuration
 def get_config():
@@ -50,7 +51,8 @@ def get_config():
                 github_token=os.environ.get("GITHUB_TOKEN", ""),
                 port=int(os.environ.get("PORT", 8000)),
                 webhook_url=os.environ.get("WEBHOOK_URL"),
-                use_ngrok=os.environ.get("USE_NGROK", "true").lower() == "true"
+                use_ngrok=os.environ.get("USE_NGROK", "true").lower() == "true",
+                ngrok_auth_token=os.environ.get("NGROK_AUTH_TOKEN")
             )
     except Exception as e:
         logger.error(f"Failed to load configuration: {e}")
@@ -253,7 +255,7 @@ if __name__ == "__main__":
     # Start ngrok if enabled
     if config.use_ngrok and not config.webhook_url:
         print("\n🔄 Starting ngrok tunnel...")
-        ngrok_manager = NgrokManager(config.port)
+        ngrok_manager = NgrokManager(config.port, auth_token=config.ngrok_auth_token)
         webhook_url_override = ngrok_manager.start_tunnel()
         
         if not webhook_url_override:

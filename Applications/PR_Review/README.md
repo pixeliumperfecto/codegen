@@ -73,6 +73,7 @@
    
    # Ngrok Configuration
    USE_NGROK="true"
+   NGROK_AUTH_TOKEN="your_ngrok_auth_token_here"
    
    # Codegen Configuration
    ANTHROPIC_API_KEY="your_anthropic_api_key_here"
@@ -127,7 +128,12 @@ The PR Review Bot now includes built-in ngrok integration:
    - All repository webhooks are automatically updated to use the new URL
    - This ensures webhooks always point to your current ngrok URL
 
-3. If you prefer to manage ngrok manually:
+3. For better stability, set your ngrok authentication token:
+   - Get your token from: https://dashboard.ngrok.com/get-started/your-authtoken
+   - Add it to your `.env` file: `NGROK_AUTH_TOKEN="your_token_here"`
+   - This allows for longer sessions and more reliable connections
+
+4. If you prefer to manage ngrok manually:
    - Set `USE_NGROK="false"` in your `.env` file
    - Set `WEBHOOK_URL="your-public-url/webhook"` with your manually created URL
 
