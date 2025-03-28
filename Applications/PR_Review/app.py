@@ -15,6 +15,7 @@ from typing import Optional, Dict, List
 from helpers import review_pr, get_github_client
 from webhook_manager import WebhookManager
 from ngrok_manager import NgrokManager
+from cloudflare_manager import CloudflareManager
 from codegen.extensions.events.github import GitHub
 from codegen.extensions.github.types.events.pull_request import PullRequestOpenedEvent
 from codegen.git.repo_operator.repo_operator import RepoOperator
@@ -47,6 +48,11 @@ class Config(BaseModel):
     webhook_url: Optional[str] = Field(None, description="URL for the webhook endpoint")
     use_ngrok: bool = Field(True, description="Whether to use ngrok for exposing the server")
     ngrok_auth_token: Optional[str] = Field(None, description="Ngrok authentication token")
+    use_cloudflare: bool = Field(False, description="Whether to use Cloudflare Workers")
+    cloudflare_api_token: Optional[str] = Field(None, description="Cloudflare API token")
+    cloudflare_account_id: Optional[str] = Field(None, description="Cloudflare account ID")
+    cloudflare_zone_id: Optional[str] = Field(None, description="Cloudflare zone ID for custom domain")
+    cloudflare_worker_route: Optional[str] = Field(None, description="Cloudflare worker route pattern")
 
 # Load configuration
 def get_config():
@@ -62,14 +68,20 @@ def get_config():
                 port=int(os.environ.get("PORT", 8000)),
                 webhook_url=os.environ.get("WEBHOOK_URL"),
                 use_ngrok=os.environ.get("USE_NGROK", "true").lower() == "true",
-                ngrok_auth_token=os.environ.get("NGROK_AUTH_TOKEN")
+                ngrok_auth_token=os.environ.get("NGROK_AUTH_TOKEN"),
+                use_cloudflare=os.environ.get("USE_CLOUDFLARE", "false").lower() == "true",
+                cloudflare_api_token=os.environ.get("CLOUDFLARE_API_TOKEN"),
+                cloudflare_account_id=os.environ.get("CLOUDFLARE_ACCOUNT_ID"),
+                cloudflare_zone_id=os.environ.get("CLOUDFLARE_ZONE_ID"),
+                cloudflare_worker_route=os.environ.get("CLOUDFLARE_WORKER_ROUTE")
             )
     except Exception as e:
         logger.error(f"Failed to load configuration: {e}")
         raise HTTPException(status_code=500, detail="Failed to load configuration")
 
-# Global variables for ngrok
+# Global variables for ngrok and cloudflare
 ngrok_manager = None
+cloudflare_manager = None
 webhook_url_override = None
 
 def is_url_accessible(url: str) -> bool:
@@ -91,7 +103,7 @@ def get_webhook_manager(config: Config = Depends(get_config)):
         
     github_client = get_github_client(config.github_token)
     
-    # Use the override URL if available (from ngrok)
+    # Use the override URL if available (from ngrok or cloudflare)
     webhook_url = webhook_url_override or config.webhook_url
     
     if not webhook_url:
@@ -105,7 +117,7 @@ def get_webhook_manager(config: Config = Depends(get_config)):
         if ip.startswith(("127.", "10.", "172.", "192.168.")):
             print("\n⚠️ WARNING: Using a local IP address for webhook URL.")
             print("GitHub webhooks require a publicly accessible URL.")
-            print("Consider enabling ngrok by setting USE_NGROK=true in your environment.")
+            print("Consider enabling ngrok or Cloudflare Workers for exposing the server.")
     else:
         # Check if webhook URL is accessible
         if not is_url_accessible(webhook_url):
@@ -324,8 +336,30 @@ if __name__ == "__main__":
     
     print("\n🤖 Starting PR Review Bot")
     
-    # Start ngrok if enabled
-    if config.use_ngrok and not config.webhook_url:
+    # Start Cloudflare Worker if enabled
+    if config.use_cloudflare:
+        if not config.cloudflare_api_token or not config.cloudflare_account_id:
+            print("\n❌ ERROR: Cloudflare API token and account ID are required when using Cloudflare Workers.")
+            print("Please set the CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID environment variables.")
+            exit(1)
+            
+        print("\n☁️ Setting up Cloudflare Worker...")
+        local_url = f"http://localhost:{config.port}/webhook"
+        cloudflare_manager = CloudflareManager(
+            api_token=config.cloudflare_api_token,
+            account_id=config.cloudflare_account_id,
+            local_url=local_url,
+            zone_id=config.cloudflare_zone_id,
+            worker_route=config.cloudflare_worker_route
+        )
+        webhook_url_override = cloudflare_manager.create_worker()
+        
+        if not webhook_url_override:
+            print("\n⚠️ WARNING: Failed to set up Cloudflare Worker.")
+            print("The bot will continue to run, but webhooks may not work correctly.")
+            print("Check your Cloudflare API token and account ID.")
+    # Start ngrok if enabled and Cloudflare is not used
+    elif config.use_ngrok and not config.webhook_url:
         print("\n🔄 Starting ngrok tunnel...")
         ngrok_manager = NgrokManager(config.port, auth_token=config.ngrok_auth_token)
         webhook_url_override = ngrok_manager.start_tunnel()
