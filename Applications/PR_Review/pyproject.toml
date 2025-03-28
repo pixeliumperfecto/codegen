@@ -19,6 +19,7 @@ dependencies = [
     "codegen>=0.18.0",
     "pydantic>=2.4.2",
     "pyngrok>=6.0.0",
+    "requests>=2.31.0",
 ]
 
 [project.optional-dependencies]
