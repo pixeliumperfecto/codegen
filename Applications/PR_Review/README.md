@@ -2,7 +2,7 @@
 
 ## Core Functionality
 
-- Monitor all incoming PRs to specified GitHub repositories
+- Monitor all incoming PRs to any GitHub repository
 - Review PRs against documentation in root directory (.md files)
 - Auto-approve PRs that comply with documentation
 - Suggest changes for non-compliant PRs
@@ -61,7 +61,6 @@
    ```
    # GitHub Configuration
    GITHUB_TOKEN="your_github_token_here"
-   GITHUB_REPOSITORIES="owner1/repo1,owner2/repo2"
    
    # Server Configuration
    PORT=8000
