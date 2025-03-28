@@ -23,6 +23,7 @@
 - Automated commenting and approvals
 - Dynamic webhook management for all repositories
 - Automatic ngrok integration for local development
+- Robust error handling and logging
 
 ## Configuration Options
 
@@ -38,6 +39,7 @@
 - Auto-approval for compliant PRs
 - Automatic webhook management
 - One-command setup with automatic ngrok tunneling
+- Graceful error handling with detailed logs
 
 ## Installation
 
@@ -169,6 +171,28 @@ If you see errors like "Failed to create webhook for repository/name", check the
 4. **ngrok Installation**: If using automatic ngrok integration, make sure ngrok is installed
    - Install with: `pip install pyngrok`
 
+### Troubleshooting PR Review Issues
+
+If you encounter errors during PR review, the bot now includes improved error handling:
+
+1. **Webhook 500 Errors**: The bot now gracefully handles errors during webhook processing
+   - Errors are logged with detailed stack traces for debugging
+   - GitHub receives a successful response to prevent webhook retries
+   - The error details are included in the response for troubleshooting
+
+2. **Codegen Integration Issues**: If there are problems with the Codegen analysis
+   - The bot will catch and log the specific error
+   - It will still provide a meaningful response to GitHub
+   - The PR will receive a comment explaining that manual review is needed
+
+3. **GitHub API Rate Limits**: If you hit GitHub API rate limits
+   - The error will be clearly logged with details
+   - The bot will continue running and process new requests when limits reset
+
+4. **Viewing Logs**: Check the console output for detailed error logs
+   - All errors include stack traces to help identify the root cause
+   - Critical errors are highlighted in the console output
+
 ### Automatic Webhook Management
 
 The PR Review Bot automatically manages webhooks for all repositories accessible by your GitHub token:
@@ -216,3 +240,4 @@ curl -X POST http://localhost:8000/review/pixeliumperfecto/codegen/123
 6. **Review Generation**: It generates a detailed review with specific issues and suggestions
 7. **GitHub Integration**: It posts comments and formal reviews on the PR
 8. **Auto-Approval**: If the PR complies with documentation, it automatically approves it
+9. **Error Handling**: Robust error handling ensures the bot continues to function even when issues occur

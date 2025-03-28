@@ -2,9 +2,11 @@ import logging
 import os
 import socket
 import requests
+import traceback
 from logging import getLogger
 from fastapi import FastAPI, Request, Depends, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 import uvicorn
 from github import Github
 from pydantic import BaseModel, Field
@@ -105,6 +107,20 @@ def get_webhook_manager(config: Config = Depends(get_config)):
     
     return WebhookManager(github_client, webhook_url)
 
+# Exception handler for all unhandled exceptions
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled exception: {exc}")
+    logger.error(traceback.format_exc())
+    return JSONResponse(
+        status_code=500,
+        content={
+            "status": "error",
+            "message": f"An unexpected error occurred: {str(exc)}",
+            "type": type(exc).__name__
+        }
+    )
+
 # GitHub webhook handler
 @app.post("/webhook")
 async def webhook(request: Request, config: Config = Depends(get_config)):
@@ -120,6 +136,7 @@ async def webhook(request: Request, config: Config = Depends(get_config)):
     
     # Check event type
     event_type = request.headers.get("X-GitHub-Event")
+    logger.info(f"Received webhook event: {event_type}")
     
     # Handle repository creation event
     if event_type == "repository":
@@ -153,12 +170,22 @@ async def webhook(request: Request, config: Config = Depends(get_config)):
         
         # Process the PR
         try:
+            logger.info(f"Processing PR #{pr_number} in {repo_name}")
             github_client = get_github_client(config.github_token)
             result = review_pr(github_client, repo_name, pr_number)
+            logger.info(f"PR review completed for #{pr_number} in {repo_name}")
             return {"status": "success", "result": result}
         except Exception as e:
             logger.error(f"Error processing PR: {e}")
-            raise HTTPException(status_code=500, detail=f"Error processing PR: {str(e)}")
+            logger.error(traceback.format_exc())
+            # Return a 200 response to GitHub to acknowledge receipt
+            # This prevents GitHub from retrying the webhook
+            return {
+                "status": "error", 
+                "message": f"Error processing PR: {str(e)}",
+                "pr_number": pr_number,
+                "repo_name": repo_name
+            }
     
     # Return for other event types
     return {"status": "ignored", "reason": f"Ignored event type: {event_type}"}
@@ -180,11 +207,14 @@ async def manual_review(
     
     # Process the PR
     try:
+        logger.info(f"Manual review requested for PR #{pr_number} in {repo_full_name}")
         github_client = get_github_client(config.github_token)
         result = review_pr(github_client, repo_full_name, pr_number)
+        logger.info(f"Manual PR review completed for #{pr_number} in {repo_full_name}")
         return {"status": "success", "result": result}
     except Exception as e:
         logger.error(f"Error processing PR: {e}")
+        logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Error processing PR: {str(e)}")
 
 # Setup webhooks endpoint
