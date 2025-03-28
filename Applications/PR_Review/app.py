@@ -1,6 +1,7 @@
 import logging
 import os
 import socket
+import requests
 from logging import getLogger
 from fastapi import FastAPI, Request, Depends, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
@@ -44,7 +45,7 @@ def get_config():
         else:
             # Use environment variables as fallback
             return Config(
-                github_token=os.environ["GITHUB_TOKEN"],
+                github_token=os.environ.get("GITHUB_TOKEN", ""),
                 port=int(os.environ.get("PORT", 8000)),
                 webhook_url=os.environ.get("WEBHOOK_URL")
             )
@@ -52,8 +53,21 @@ def get_config():
         logger.error(f"Failed to load configuration: {e}")
         raise HTTPException(status_code=500, detail="Failed to load configuration")
 
+def is_url_accessible(url: str) -> bool:
+    """Check if a URL is publicly accessible"""
+    try:
+        response = requests.head(url, timeout=5)
+        return response.status_code < 400
+    except:
+        return False
+
 # Get webhook manager
 def get_webhook_manager(config: Config = Depends(get_config)):
+    if not config.github_token:
+        print("ERROR: GitHub token not provided. Please set the GITHUB_TOKEN environment variable.")
+        print("Make sure your token has 'admin:repo_hook' scope to create webhooks.")
+        raise HTTPException(status_code=500, detail="GitHub token not provided")
+        
     github_client = get_github_client(config.github_token)
     webhook_url = config.webhook_url
     
@@ -63,6 +77,22 @@ def get_webhook_manager(config: Config = Depends(get_config)):
         ip = socket.gethostbyname(hostname)
         webhook_url = f"http://{ip}:{config.port}/webhook"
         logger.info(f"Auto-detected webhook URL: {webhook_url}")
+        
+        # Check if using localhost or private IP
+        if ip.startswith(("127.", "10.", "172.", "192.168.")):
+            print("\n⚠️ WARNING: Using a local IP address for webhook URL.")
+            print("GitHub webhooks require a publicly accessible URL.")
+            print("Consider using ngrok to expose your local server:")
+            print("1. Install ngrok: pip install pyngrok or download from ngrok.com")
+            print("2. Run: ngrok http 8000")
+            print("3. Set WEBHOOK_URL environment variable to the ngrok URL + /webhook")
+            print("   Example: export WEBHOOK_URL=https://abc123.ngrok.io/webhook\n")
+    else:
+        # Check if webhook URL is accessible
+        if not is_url_accessible(webhook_url):
+            print(f"\n⚠️ WARNING: Webhook URL {webhook_url} does not appear to be publicly accessible.")
+            print("GitHub webhooks require a publicly accessible URL.")
+            print("Make sure your URL is correct and the server is running.\n")
     
     return WebhookManager(github_client, webhook_url)
 
@@ -202,12 +232,24 @@ async def webhook_status(
 # Main entry point
 if __name__ == "__main__":
     config = get_config()
-    logger.info(f"Starting PR Review Bot on port {config.port}")
+    
+    # Check GitHub token
+    if not config.github_token:
+        print("\n❌ ERROR: GitHub token not provided.")
+        print("Please set the GITHUB_TOKEN environment variable.")
+        print("Example: export GITHUB_TOKEN=ghp_your_token_here")
+        print("Make sure your token has 'admin:repo_hook' scope to create webhooks.\n")
+        exit(1)
+    
+    print("\n🤖 Starting PR Review Bot")
+    print(f"Server will run on: http://0.0.0.0:{config.port}")
     
     # Setup webhooks on startup
     webhook_manager = get_webhook_manager(config)
-    logger.info("Setting up webhooks for all repositories...")
+    print("\n🔗 Setting up webhooks for all repositories...")
     results = webhook_manager.setup_webhooks_for_all_repos()
-    logger.info(f"Webhook setup completed for {len(results)} repositories")
+    print(f"\n✅ Webhook setup completed for {len(results)} repositories")
     
+    # Start the server
+    print("\n🚀 Starting server...")
     uvicorn.run(app, host="0.0.0.0", port=config.port)

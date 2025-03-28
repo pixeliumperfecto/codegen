@@ -4,6 +4,7 @@ from typing import List, Dict, Optional, Tuple
 from logging import getLogger
 from github import Github
 from github.Repository import Repository
+from github.GithubException import GithubException
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -49,6 +50,9 @@ class WebhookManager:
         logger.info(f"Listing webhooks for {repo.full_name}")
         try:
             return list(repo.get_hooks())
+        except GithubException as e:
+            logger.error(f"Error listing webhooks for {repo.full_name}: {e.status} - {e.data.get('message', '')}")
+            return []
         except Exception as e:
             logger.error(f"Error listing webhooks for {repo.full_name}: {e}")
             return []
@@ -95,8 +99,18 @@ class WebhookManager:
             )
             logger.info(f"Webhook created successfully for {repo.full_name}")
             return hook
+        except GithubException as e:
+            error_message = f"Error creating webhook for {repo.full_name}: {e.status} - {e.data.get('message', '')}"
+            logger.error(error_message)
+            print(error_message)
+            if e.status == 404:
+                print(f"Repository {repo.full_name}: Permission denied. Make sure your token has 'admin:repo_hook' scope.")
+            elif e.status == 422:
+                print(f"Repository {repo.full_name}: Invalid webhook URL or configuration. Make sure your webhook URL is publicly accessible.")
+            return None
         except Exception as e:
             logger.error(f"Error creating webhook for {repo.full_name}: {e}")
+            print(f"Error creating webhook for {repo.full_name}: {e}")
             return None
     
     def update_webhook_url(self, repo: Repository, hook_id: int, new_url: str) -> bool:
@@ -123,6 +137,9 @@ class WebhookManager:
             )
             logger.info(f"Webhook URL updated successfully for {repo.full_name}")
             return True
+        except GithubException as e:
+            logger.error(f"Error updating webhook URL for {repo.full_name}: {e.status} - {e.data.get('message', '')}")
+            return False
         except Exception as e:
             logger.error(f"Error updating webhook URL for {repo.full_name}: {e}")
             return False
