@@ -55,6 +55,7 @@ class Config(BaseModel):
     cloudflare_worker_name: str = Field("pr-review-bot", description="Name for the Cloudflare Worker")
     cloudflare_worker_route: Optional[str] = Field(None, description="Route pattern for the Cloudflare Worker (optional)")
 
+
 # Load configuration
 def get_config():
     try:
@@ -74,7 +75,9 @@ def get_config():
                 cloudflare_api_token=os.environ.get("CLOUDFLARE_API_TOKEN"),
                 cloudflare_account_id=os.environ.get("CLOUDFLARE_ACCOUNT_ID"),
                 cloudflare_zone_id=os.environ.get("CLOUDFLARE_ZONE_ID"),
+<<<<<< codegen-cloudflare-integration
                 cloudflare_worker_name=os.environ.get("CLOUDFLARE_WORKER_NAME", "pr-review-bot"),
+
                 cloudflare_worker_route=os.environ.get("CLOUDFLARE_WORKER_ROUTE")
             )
     except Exception as e:
@@ -82,6 +85,7 @@ def get_config():
         raise HTTPException(status_code=500, detail="Failed to load configuration")
 
 # Global variables for URL management
+
 ngrok_manager = None
 cloudflare_manager = None
 webhook_url_override = None
@@ -106,6 +110,7 @@ def get_webhook_manager(config: Config = Depends(get_config)):
     github_client = get_github_client(config.github_token)
     
     # Use the override URL if available (from ngrok or Cloudflare)
+
     webhook_url = webhook_url_override or config.webhook_url
     
     if not webhook_url:
@@ -120,6 +125,7 @@ def get_webhook_manager(config: Config = Depends(get_config)):
             print("\n⚠️ WARNING: Using a local IP address for webhook URL.")
             print("GitHub webhooks require a publicly accessible URL.")
             print("Consider enabling ngrok or Cloudflare in your environment.")
+
     else:
         # Check if webhook URL is accessible
         if not is_url_accessible(webhook_url):
@@ -485,6 +491,7 @@ if __name__ == "__main__":
     
     # Start ngrok if enabled and Cloudflare is not set up
     if config.use_ngrok and not webhook_url_override and not config.webhook_url:
+
         print("\n🔄 Starting ngrok tunnel...")
         ngrok_manager = NgrokManager(config.port, auth_token=config.ngrok_auth_token)
         webhook_url_override = ngrok_manager.start_tunnel()

@@ -1,7 +1,8 @@
 import logging
-import os
 import requests
-from typing import Optional, Dict, Any, Tuple
+import json
+import os
+from typing import Optional, Dict, Any
 from logging import getLogger
 
 # Configure logging
@@ -10,9 +11,8 @@ logger = getLogger(__name__)
 
 class CloudflareManager:
     """
-    Manages Cloudflare Workers for creating a secure passthrough for GitHub webhooks.
-    This allows the PR Review Bot to receive webhooks through a stable Cloudflare URL
-    even when running on a WSL2 instance.
+    Manages Cloudflare Workers for exposing the local server to the internet.
+    Creates a worker that forwards webhook requests to the local server.
     """
     
     def __init__(

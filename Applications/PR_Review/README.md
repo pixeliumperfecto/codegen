@@ -12,14 +12,15 @@ A bot that automatically reviews pull requests against documentation in the repo
 - **Auto-approval** for compliant PRs
 - **Dynamic webhook management** for all repositories
 - **Automatic ngrok integration** for local development
-- **Cloudflare Workers integration** for stable production deployment
+- **Cloudflare Workers integration** for stable production deployments
+
 
 ## Requirements
 
 - Python 3.10 or higher
 - GitHub Personal Access Token with `repo` and `admin:repo_hook` scopes
-- For local development: ngrok account (free tier works)
-- For production: Cloudflare account with Workers capability
+- ngrok account (free tier works) for local development
+- Cloudflare account (optional, for production deployments)
 
 ## Installation
 
@@ -39,14 +40,17 @@ A bot that automatically reviews pull requests against documentation in the repo
    # Required
    GITHUB_TOKEN=your_github_token_here
    
-   # For local development with ngrok
-   USE_NGROK=true
+   # For ngrok (local development)
    NGROK_AUTH_TOKEN=your_ngrok_auth_token_here
+   USE_NGROK=true
    
-   # For production with Cloudflare
-   USE_CLOUDFLARE=true
+   # For Cloudflare (production)
+   USE_CLOUDFLARE=false
    CLOUDFLARE_API_TOKEN=your_cloudflare_api_token_here
    CLOUDFLARE_ACCOUNT_ID=your_cloudflare_account_id_here
+   
+   # Server configuration
+   PORT=8000
    ```
 
 ## Usage
@@ -58,7 +62,7 @@ A bot that automatically reviews pull requests against documentation in the repo
 
 2. The bot will:
    - Start a local server
-   - Set up a public endpoint (using ngrok or Cloudflare Workers)
+   - Set up a tunnel (ngrok or Cloudflare Workers) to expose your local server
    - Set up webhooks for all repositories accessible by your GitHub token
    - Begin reviewing PRs as they are opened or updated
 
@@ -127,6 +131,7 @@ The bot will create a route for your worker on your custom domain.
 
 ## API Endpoints
 
+
 - `GET /health` - Health check endpoint
 - `POST /webhook` - GitHub webhook endpoint
 - `POST /review/{owner}/{repo}/{pr_number}` - Manually trigger a PR review
@@ -135,12 +140,32 @@ The bot will create a route for your worker on your custom domain.
 - `POST /setup-cloudflare` - Manually set up Cloudflare Worker
 - `GET /test-cloudflare` - Test the connection to the Cloudflare Worker
 
+## Cloudflare Workers Setup (Production)
+
+1. Sign up for a Cloudflare account at https://dash.cloudflare.com/sign-up
+2. Create an API token with the following permissions:
+   - Account-level: `Workers Scripts:Edit`
+   - Zone-level: `Workers Routes:Edit` (if using a custom domain)
+3. Get your account ID from the Cloudflare dashboard URL (e.g., `https://dash.cloudflare.com/abc123` where `abc123` is your account ID)
+4. Add to your `.env` file:
+   ```
+   USE_CLOUDFLARE=true
+   CLOUDFLARE_API_TOKEN=your_api_token_here
+   CLOUDFLARE_ACCOUNT_ID=your_account_id_here
+   ```
+5. For custom domain (optional):
+   ```
+   CLOUDFLARE_ZONE_ID=your_zone_id_here
+   CLOUDFLARE_WORKER_ROUTE=your_domain.com/webhook/*
+   ```
+
 ## Troubleshooting
 
 ### Webhook Issues
 
 - **Webhook creation fails**: Make sure your GitHub token has the `admin:repo_hook` scope
 - **Webhook not receiving events**: Check that your public endpoint (ngrok or Cloudflare) is accessible
+
 - **500 errors in webhook logs**: Check the bot's logs for detailed error information
 
 ### Ngrok Issues
@@ -151,9 +176,9 @@ The bot will create a route for your worker on your custom domain.
 
 ### Cloudflare Issues
 
-- **Worker creation fails**: Make sure your Cloudflare API token has the Workers and DNS permissions
-- **Worker not receiving requests**: Check that your local server is running and accessible
-- **Custom domain not working**: Make sure your zone ID and route pattern are correct
+- **Worker creation fails**: Make sure your API token has the `Workers Scripts:Edit` permission
+- **Route creation fails**: Make sure your API token has the `Workers Routes:Edit` permission
+- **Worker not receiving requests**: Check that your local server is running and accessible from Cloudflare
 
 ## Advanced Configuration
 
@@ -163,7 +188,7 @@ You can customize the bot's behavior by modifying the following files:
 - `helpers.py`: PR review logic and Codegen integration
 - `webhook_manager.py`: GitHub webhook management
 - `ngrok_manager.py`: ngrok tunnel management
-- `cloudflare_manager.py`: Cloudflare Workers integration
+- `cloudflare_manager.py`: Cloudflare Workers management
 
 ## Contributing
 
