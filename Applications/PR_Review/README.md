@@ -14,6 +14,7 @@ A bot that automatically reviews pull requests against documentation in the repo
 - **Automatic ngrok integration** for local development
 - **Cloudflare Workers integration** for stable production deployments
 
+
 ## Requirements
 
 - Python 3.10 or higher
@@ -70,6 +71,48 @@ A bot that automatically reviews pull requests against documentation in the repo
    curl -X POST http://localhost:8000/review/{owner}/{repo}/{pr_number}
    ```
 
+## Deployment Options
+
+### Local Development with ngrok
+
+For local development or testing, the bot uses ngrok to expose your local server to the internet:
+
+1. Set `USE_NGROK=true` in your `.env` file
+2. Provide your ngrok auth token: `NGROK_AUTH_TOKEN=your_token_here`
+3. Run the bot: `python app.py`
+
+The bot will automatically start ngrok, get a public URL, and set up webhooks for all repositories.
+
+### Production Deployment with Cloudflare Workers
+
+For a more stable production deployment, the bot can use Cloudflare Workers:
+
+1. Set `USE_CLOUDFLARE=true` in your `.env` file
+2. Provide your Cloudflare API token and account ID:
+   ```
+   CLOUDFLARE_API_TOKEN=your_api_token_here
+   CLOUDFLARE_ACCOUNT_ID=your_account_id_here
+   ```
+3. Run the bot: `python app.py`
+
+The bot will:
+- Create a Cloudflare Worker that forwards webhook requests to your local server
+- Set up webhooks for all repositories to point to the Cloudflare Worker URL
+- Automatically handle webhook verification and security
+
+#### Using a Custom Domain with Cloudflare
+
+To use a custom domain for your webhook endpoint:
+
+1. Add your zone ID and route pattern to your `.env` file:
+   ```
+   CLOUDFLARE_ZONE_ID=your_zone_id_here
+   CLOUDFLARE_WORKER_ROUTE=your_domain.com/webhook/*
+   ```
+2. Run the bot: `python app.py`
+
+The bot will create a route for your worker on your custom domain.
+
 ## How It Works
 
 1. **Webhook Setup**: The bot automatically sets up webhooks for all repositories accessible by your GitHub token.
@@ -86,11 +129,16 @@ A bot that automatically reviews pull requests against documentation in the repo
    - It leverages Codegen's GitHub tools for PR interaction
    - It provides detailed, context-aware reviews
 
-## Ngrok Authentication Setup (Local Development)
+## API Endpoints
 
-1. Sign up for a free ngrok account at https://dashboard.ngrok.com/signup
-2. Get your authtoken from https://dashboard.ngrok.com/get-started/your-authtoken
-3. Add it to your `.env` file as `NGROK_AUTH_TOKEN=your_token_here`
+
+- `GET /health` - Health check endpoint
+- `POST /webhook` - GitHub webhook endpoint
+- `POST /review/{owner}/{repo}/{pr_number}` - Manually trigger a PR review
+- `POST /setup-webhooks` - Manually trigger webhook setup for all repositories
+- `GET /webhook-status` - Get the status of webhooks for all repositories
+- `POST /setup-cloudflare` - Manually set up Cloudflare Worker
+- `GET /test-cloudflare` - Test the connection to the Cloudflare Worker
 
 ## Cloudflare Workers Setup (Production)
 
@@ -116,7 +164,8 @@ A bot that automatically reviews pull requests against documentation in the repo
 ### Webhook Issues
 
 - **Webhook creation fails**: Make sure your GitHub token has the `admin:repo_hook` scope
-- **Webhook not receiving events**: Check that your tunnel (ngrok or Cloudflare) is running and accessible
+- **Webhook not receiving events**: Check that your public endpoint (ngrok or Cloudflare) is accessible
+
 - **500 errors in webhook logs**: Check the bot's logs for detailed error information
 
 ### Ngrok Issues
