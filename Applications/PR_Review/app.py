@@ -255,13 +255,27 @@ if __name__ == "__main__":
     # Start ngrok if enabled
     if config.use_ngrok and not config.webhook_url:
         print("\n🔄 Starting ngrok tunnel...")
+        
+        # Create ngrok manager with authentication token
         ngrok_manager = NgrokManager(config.port, auth_token=config.ngrok_auth_token)
+        
+        # Try to start the tunnel
         webhook_url_override = ngrok_manager.start_tunnel()
         
+        # If tunnel failed to start
         if not webhook_url_override:
             print("\n⚠️ WARNING: Failed to start ngrok tunnel.")
             print("The bot will continue to run, but webhooks may not work correctly.")
-            print("Consider setting WEBHOOK_URL manually or fixing ngrok installation.\n")
+            print("Consider setting WEBHOOK_URL manually or fixing ngrok installation.")
+            
+            # Provide specific instructions for authentication issues
+            if config.ngrok_auth_token:
+                print("\nTry running this command manually to set up ngrok authentication:")
+                print(f"ngrok config add-authtoken {config.ngrok_auth_token}")
+            else:
+                print("\nTo use ngrok, you need to provide an authentication token.")
+                print("1. Get your token from: https://dashboard.ngrok.com/get-started/your-authtoken")
+                print("2. Add it to your .env file as NGROK_AUTH_TOKEN=\"your_token_here\"")
     
     print(f"\n🌐 Server will run on: http://0.0.0.0:{config.port}")
     
@@ -271,6 +285,13 @@ if __name__ == "__main__":
         print("\n🔗 Setting up webhooks for all repositories...")
         results = webhook_manager.setup_webhooks_for_all_repos()
         print(f"\n✅ Webhook setup completed for {len(results)} repositories")
+        
+        # Print status for each repository
+        for repo_name, status in results.items():
+            if status["success"]:
+                print(f"✅ Repository {repo_name}: {status['message']}")
+            else:
+                print(f"❌ Repository {repo_name}: {status['message']}")
     else:
         print("\n⚠️ No webhook URL available. Skipping webhook setup.")
         print("The bot will still respond to manual requests, but won't receive GitHub events.")
