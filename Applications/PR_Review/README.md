@@ -13,6 +13,7 @@ A bot that automatically reviews pull requests against documentation in the repo
 - **Dynamic webhook management** for all repositories
 - **Automatic ngrok integration** for local development
 - **Cloudflare Workers integration** for stable production deployments
+- **KV storage** for persistent data and PR history
 
 ## Requirements
 
@@ -86,6 +87,22 @@ A bot that automatically reviews pull requests against documentation in the repo
    - It leverages Codegen's GitHub tools for PR interaction
    - It provides detailed, context-aware reviews
 
+4. **KV Storage**:
+   - The bot stores PR data in Cloudflare KV storage
+   - This allows for tracking PR history and status
+   - Data is automatically expired after 24 hours to keep storage clean
+
+## API Endpoints
+
+- `GET /health` - Health check endpoint
+- `POST /webhook` - GitHub webhook endpoint
+- `POST /review/{owner}/{repo}/{pr_number}` - Manually trigger a PR review
+- `POST /setup-webhooks` - Manually trigger webhook setup for all repositories
+- `GET /webhook-status` - Get the status of webhooks for all repositories
+- `GET /kv-data` - Get all data from KV storage (when using Cloudflare)
+- `GET /kv-data/{key}` - Get a specific value from KV storage
+- `POST /kv-data/{key}` - Set a value in KV storage
+
 ## Ngrok Authentication Setup (Local Development)
 
 1. Sign up for a free ngrok account at https://dashboard.ngrok.com/signup
@@ -97,6 +114,7 @@ A bot that automatically reviews pull requests against documentation in the repo
 1. Sign up for a Cloudflare account at https://dash.cloudflare.com/sign-up
 2. Create an API token with the following permissions:
    - Account-level: `Workers Scripts:Edit`
+   - Account-level: `Workers KV Storage:Edit`
    - Zone-level: `Workers Routes:Edit` (if using a custom domain)
 3. Get your account ID from the Cloudflare dashboard URL (e.g., `https://dash.cloudflare.com/abc123` where `abc123` is your account ID)
 4. Add to your `.env` file:
@@ -110,6 +128,34 @@ A bot that automatically reviews pull requests against documentation in the repo
    CLOUDFLARE_ZONE_ID=your_zone_id_here
    CLOUDFLARE_WORKER_ROUTE=your_domain.com/webhook/*
    ```
+6. For existing KV namespace (optional):
+   ```
+   CLOUDFLARE_KV_NAMESPACE_ID=your_kv_namespace_id_here
+   ```
+
+## KV Storage
+
+The PR Review Bot uses Cloudflare KV storage for persistent data when running with Cloudflare Workers. This provides several benefits:
+
+1. **PR History Tracking**: The bot stores information about each PR it processes, including:
+   - PR number and repository
+   - Action type (opened, synchronized, etc.)
+   - Timestamp of last update
+   - PR URL
+
+2. **Data Access**: You can access the stored data via the API endpoints:
+   - `GET /kv-data` - Get all stored data
+   - `GET /kv-data/{key}` - Get a specific value
+   - `POST /kv-data/{key}` - Set a value
+
+3. **Automatic Cleanup**: Data is automatically expired after 24 hours to keep storage clean
+
+4. **Key Format**: PR data is stored with keys in the format `pr:{repo_name}:{pr_number}`
+
+Example of retrieving PR data:
+```bash
+curl http://localhost:8000/kv-data/pr:pixeliumperfecto/codegen:123
+```
 
 ## Troubleshooting
 
@@ -130,6 +176,7 @@ A bot that automatically reviews pull requests against documentation in the repo
 - **Worker creation fails**: Make sure your API token has the `Workers Scripts:Edit` permission
 - **Route creation fails**: Make sure your API token has the `Workers Routes:Edit` permission
 - **Worker not receiving requests**: Check that your local server is running and accessible from Cloudflare
+- **KV storage issues**: Make sure your API token has the `Workers KV Storage:Edit` permission
 
 ## Advanced Configuration
 
@@ -139,7 +186,7 @@ You can customize the bot's behavior by modifying the following files:
 - `helpers.py`: PR review logic and Codegen integration
 - `webhook_manager.py`: GitHub webhook management
 - `ngrok_manager.py`: ngrok tunnel management
-- `cloudflare_manager.py`: Cloudflare Workers management
+- `cloudflare_manager.py`: Cloudflare Workers and KV storage management
 
 ## Contributing
 
