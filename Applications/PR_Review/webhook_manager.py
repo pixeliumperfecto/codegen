@@ -15,18 +15,16 @@ class WebhookManager:
     Ensures all repositories have webhooks configured and keeps them updated.
     """
     
-    def __init__(self, github_client: Github, webhook_url: str, webhook_secret: str):
+    def __init__(self, github_client: Github, webhook_url: str):
         """
         Initialize the webhook manager.
         
         Args:
             github_client: GitHub client instance
             webhook_url: URL for the webhook (e.g., https://example.com/webhook)
-            webhook_secret: Secret for webhook validation
         """
         self.github_client = github_client
         self.webhook_url = webhook_url
-        self.webhook_secret = webhook_secret
     
     def get_all_repositories(self) -> List[Repository]:
         """
@@ -86,14 +84,13 @@ class WebhookManager:
             config = {
                 "url": self.webhook_url,
                 "content_type": "json",
-                "secret": self.webhook_secret,
                 "insecure_ssl": "0"
             }
             
             hook = repo.create_hook(
                 name="web",
                 config=config,
-                events=["pull_request"],
+                events=["pull_request", "repository"],
                 active=True
             )
             logger.info(f"Webhook created successfully for {repo.full_name}")
@@ -182,6 +179,7 @@ class WebhookManager:
         for repo in repos:
             success, message = self.ensure_webhook_exists(repo)
             results[repo.full_name] = message
+            print(f"Repository {repo.full_name}: {message}")
             
         return results
     
@@ -199,7 +197,9 @@ class WebhookManager:
         logger.info(f"Handling repository creation for {repo_name}")
         try:
             repo = self.github_client.get_repo(repo_name)
-            return self.ensure_webhook_exists(repo)
+            success, message = self.ensure_webhook_exists(repo)
+            print(f"New repository {repo_name}: {message}")
+            return success, message
         except Exception as e:
             logger.error(f"Error handling repository creation for {repo_name}: {e}")
             return False, f"Error: {str(e)}"

@@ -32,7 +32,6 @@ app.add_middleware(
 class Config(BaseModel):
     github_token: str = Field(..., description="GitHub Personal Access Token")
     port: int = Field(8000, description="Port for the local server")
-    webhook_secret: Optional[str] = Field(None, description="Secret for GitHub webhook validation")
     webhook_url: Optional[str] = Field(None, description="URL for the webhook endpoint")
 
 # Load configuration
@@ -47,7 +46,6 @@ def get_config():
             return Config(
                 github_token=os.environ["GITHUB_TOKEN"],
                 port=int(os.environ.get("PORT", 8000)),
-                webhook_secret=os.environ.get("WEBHOOK_SECRET"),
                 webhook_url=os.environ.get("WEBHOOK_URL")
             )
     except Exception as e:
@@ -58,7 +56,6 @@ def get_config():
 def get_webhook_manager(config: Config = Depends(get_config)):
     github_client = get_github_client(config.github_token)
     webhook_url = config.webhook_url
-    webhook_secret = config.webhook_secret or ""
     
     if not webhook_url:
         # Try to determine webhook URL from hostname
@@ -67,22 +64,13 @@ def get_webhook_manager(config: Config = Depends(get_config)):
         webhook_url = f"http://{ip}:{config.port}/webhook"
         logger.info(f"Auto-detected webhook URL: {webhook_url}")
     
-    return WebhookManager(github_client, webhook_url, webhook_secret)
+    return WebhookManager(github_client, webhook_url)
 
 # GitHub webhook handler
 @app.post("/webhook")
 async def webhook(request: Request, config: Config = Depends(get_config)):
     # Get the raw request body
     body = await request.body()
-    
-    # Validate webhook signature if secret is configured
-    if config.webhook_secret:
-        signature = request.headers.get("X-Hub-Signature-256")
-        if not signature:
-            logger.warning("Missing webhook signature")
-            raise HTTPException(status_code=401, detail="Missing signature")
-        
-        # TODO: Implement signature validation
     
     # Parse the webhook payload
     try:
@@ -216,14 +204,10 @@ if __name__ == "__main__":
     config = get_config()
     logger.info(f"Starting PR Review Bot on port {config.port}")
     
-    # Setup webhooks on startup if URL is provided
-    if config.webhook_url:
-        webhook_manager = get_webhook_manager(config)
-        logger.info("Setting up webhooks for all repositories...")
-        results = webhook_manager.setup_webhooks_for_all_repos()
-        logger.info(f"Webhook setup completed for {len(results)} repositories")
-    else:
-        logger.warning("No webhook URL provided. Skipping automatic webhook setup.")
-        logger.info("Use the /setup-webhooks endpoint after starting the server to set up webhooks.")
+    # Setup webhooks on startup
+    webhook_manager = get_webhook_manager(config)
+    logger.info("Setting up webhooks for all repositories...")
+    results = webhook_manager.setup_webhooks_for_all_repos()
+    logger.info(f"Webhook setup completed for {len(results)} repositories")
     
     uvicorn.run(app, host="0.0.0.0", port=config.port)

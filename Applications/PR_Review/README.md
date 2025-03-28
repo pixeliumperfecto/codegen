@@ -68,7 +68,6 @@
    
    # Server Configuration
    PORT=8000
-   WEBHOOK_SECRET="your_webhook_secret_here"
    WEBHOOK_URL="https://your-public-url.ngrok.io/webhook"
    
    # Codegen Configuration
@@ -86,7 +85,7 @@ Run the server locally:
 python app.py
 ```
 
-The server will start on the port specified in your configuration (default: 8000).
+The server will start on the port specified in your configuration (default: 8000) and automatically set up webhooks for all repositories accessible by your GitHub token. It will print the status of each repository's webhook setup.
 
 ### Making Your Server Publicly Accessible
 
@@ -101,7 +100,7 @@ GitHub webhooks require a publicly accessible URL. Here are some options:
 3. In another terminal, run: `ngrok http 8000`
 4. ngrok will provide a public URL (like `https://abc123.ngrok.io`)
 5. Set this URL in your `.env` file: `WEBHOOK_URL="https://abc123.ngrok.io/webhook"`
-6. Restart the server or use the `/setup-webhooks` endpoint to update all webhooks
+6. Restart the server to update all webhooks automatically
 
 #### Option 2: Deploy to a Public Server (Recommended for Production)
 
@@ -114,11 +113,12 @@ For a production environment, deploy your FastAPI app to a server with a public 
 
 The PR Review Bot automatically manages webhooks for all repositories accessible by your GitHub token:
 
-1. On startup, if `WEBHOOK_URL` is provided, it will:
+1. On startup, it will:
    - Fetch all repositories accessible by your token
    - Check if each repository has a webhook for PR reviews
    - Create webhooks for repositories that don't have one
    - Update webhook URLs for repositories with outdated URLs
+   - Print the status of each repository's webhook setup
 
 2. You can also manually trigger webhook setup:
    ```
@@ -130,7 +130,7 @@ The PR Review Bot automatically manages webhooks for all repositories accessible
    GET /webhook-status
    ```
 
-4. When new repositories are created, the bot will automatically add webhooks to them (if the repository creation webhook is set up).
+4. When new repositories are created, the bot will automatically add webhooks to them and print the status.
 
 ### Manual PR Review
 
