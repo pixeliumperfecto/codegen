@@ -53,6 +53,7 @@ class Config(BaseModel):
     cloudflare_account_id: Optional[str] = Field(None, description="Cloudflare account ID")
     cloudflare_zone_id: Optional[str] = Field(None, description="Cloudflare zone ID for custom domain")
     cloudflare_worker_route: Optional[str] = Field(None, description="Cloudflare worker route pattern")
+    cloudflare_kv_namespace_id: Optional[str] = Field(None, description="Cloudflare KV namespace ID")
 
 # Load configuration
 def get_config():
@@ -73,7 +74,8 @@ def get_config():
                 cloudflare_api_token=os.environ.get("CLOUDFLARE_API_TOKEN"),
                 cloudflare_account_id=os.environ.get("CLOUDFLARE_ACCOUNT_ID"),
                 cloudflare_zone_id=os.environ.get("CLOUDFLARE_ZONE_ID"),
-                cloudflare_worker_route=os.environ.get("CLOUDFLARE_WORKER_ROUTE")
+                cloudflare_worker_route=os.environ.get("CLOUDFLARE_WORKER_ROUTE"),
+                cloudflare_kv_namespace_id=os.environ.get("CLOUDFLARE_KV_NAMESPACE_ID")
             )
     except Exception as e:
         logger.error(f"Failed to load configuration: {e}")
@@ -322,6 +324,161 @@ async def webhook_status(
         "repositories": status
     }
 
+# KV storage endpoints
+@app.get("/kv-data")
+async def get_kv_data(
+    prefix: Optional[str] = None,
+    config: Config = Depends(get_config)
+):
+    """
+    Get data from Cloudflare KV storage.
+    
+    Args:
+        prefix: Optional prefix to filter keys
+    """
+    global cloudflare_manager
+    
+    if not config.use_cloudflare:
+        return {
+            "status": "error",
+            "message": "Cloudflare integration is not enabled. Set USE_CLOUDFLARE=true in your environment."
+        }
+    
+    if not cloudflare_manager:
+        # Create Cloudflare manager
+        cloudflare_manager = CloudflareManager(
+            api_token=config.cloudflare_api_token,
+            account_id=config.cloudflare_account_id,
+            local_url=f"http://localhost:{config.port}/webhook",
+            zone_id=config.cloudflare_zone_id,
+            worker_route=config.cloudflare_worker_route,
+            kv_namespace_id=config.cloudflare_kv_namespace_id
+        )
+    
+    # List keys
+    keys = cloudflare_manager.list_kv_keys(prefix)
+    
+    # Get values for each key
+    data = {}
+    for key_info in keys:
+        key = key_info.get("name")
+        if key:
+            value = cloudflare_manager.read_kv_value(key)
+            try:
+                # Try to parse as JSON
+                data[key] = json.loads(value) if value else None
+            except:
+                # Store as string if not valid JSON
+                data[key] = value
+    
+    return {
+        "status": "success",
+        "keys_count": len(keys),
+        "data": data
+    }
+
+@app.post("/kv-data/{key}")
+async def set_kv_data(
+    key: str,
+    request: Request,
+    expiration_ttl: Optional[int] = None,
+    config: Config = Depends(get_config)
+):
+    """
+    Set data in Cloudflare KV storage.
+    
+    Args:
+        key: Key to write
+        expiration_ttl: Optional expiration time in seconds
+    """
+    global cloudflare_manager
+    
+    if not config.use_cloudflare:
+        return {
+            "status": "error",
+            "message": "Cloudflare integration is not enabled. Set USE_CLOUDFLARE=true in your environment."
+        }
+    
+    if not cloudflare_manager:
+        # Create Cloudflare manager
+        cloudflare_manager = CloudflareManager(
+            api_token=config.cloudflare_api_token,
+            account_id=config.cloudflare_account_id,
+            local_url=f"http://localhost:{config.port}/webhook",
+            zone_id=config.cloudflare_zone_id,
+            worker_route=config.cloudflare_worker_route,
+            kv_namespace_id=config.cloudflare_kv_namespace_id
+        )
+    
+    # Get request body
+    body = await request.body()
+    value = body.decode("utf-8")
+    
+    # Write value
+    success = cloudflare_manager.write_kv_value(key, value, expiration_ttl)
+    
+    return {
+        "status": "success" if success else "error",
+        "message": f"Value {'written' if success else 'failed to write'} for key: {key}"
+    }
+
+@app.get("/kv-data/{key}")
+async def get_kv_value(
+    key: str,
+    config: Config = Depends(get_config)
+):
+    """
+    Get a value from Cloudflare KV storage.
+    
+    Args:
+        key: Key to read
+    """
+    global cloudflare_manager
+    
+    if not config.use_cloudflare:
+        return {
+            "status": "error",
+            "message": "Cloudflare integration is not enabled. Set USE_CLOUDFLARE=true in your environment."
+        }
+    
+    if not cloudflare_manager:
+        # Create Cloudflare manager
+        cloudflare_manager = CloudflareManager(
+            api_token=config.cloudflare_api_token,
+            account_id=config.cloudflare_account_id,
+            local_url=f"http://localhost:{config.port}/webhook",
+            zone_id=config.cloudflare_zone_id,
+            worker_route=config.cloudflare_worker_route,
+            kv_namespace_id=config.cloudflare_kv_namespace_id
+        )
+    
+    # Read value
+    value = cloudflare_manager.read_kv_value(key)
+    
+    if value is None:
+        return {
+            "status": "error",
+            "message": f"Key not found: {key}"
+        }
+    
+    try:
+        # Try to parse as JSON
+        parsed_value = json.loads(value)
+        return {
+            "status": "success",
+            "key": key,
+            "value": parsed_value,
+            "is_json": True
+        }
+    except:
+        # Return as string if not valid JSON
+        return {
+            "status": "success",
+            "key": key,
+            "value": value,
+            "is_json": False
+        }
+
 # Main entry point
 if __name__ == "__main__":
     config = get_config()
@@ -350,8 +507,17 @@ if __name__ == "__main__":
             account_id=config.cloudflare_account_id,
             local_url=local_url,
             zone_id=config.cloudflare_zone_id,
-            worker_route=config.cloudflare_worker_route
+            worker_route=config.cloudflare_worker_route,
+            kv_namespace_id=config.cloudflare_kv_namespace_id
         )
+        
+        # Check if KV namespace exists, list namespaces if not provided
+        if not config.cloudflare_kv_namespace_id:
+            print("\n🔍 Checking for existing KV namespaces...")
+            namespaces = cloudflare_manager.list_kv_namespaces()
+            if namespaces:
+                print(f"Found {len(namespaces)} KV namespaces")
+        
         webhook_url_override = cloudflare_manager.create_worker()
         
         if not webhook_url_override:
