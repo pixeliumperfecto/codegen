@@ -12,14 +12,16 @@ class NgrokManager:
     Manages ngrok tunnel for exposing the local server to the internet.
     """
     
-    def __init__(self, port: int = 8000):
+    def __init__(self, port: int = 8000, auth_token: Optional[str] = None):
         """
         Initialize the ngrok manager.
         
         Args:
             port: Local port to expose (default: 8000)
+            auth_token: Ngrok authentication token (optional)
         """
         self.port = port
+        self.auth_token = auth_token
         self.tunnel = None
         self.public_url = None
         
@@ -31,9 +33,11 @@ class NgrokManager:
             Public URL for the tunnel, or None if failed
         """
         try:
-            # Configure ngrok (optional)
-            # If you have an ngrok auth token, you can set it here
-            # conf.get_default().auth_token = "your_auth_token"
+            # Configure ngrok with auth token if provided
+            if self.auth_token:
+                logger.info("Setting ngrok authentication token")
+                conf.get_default().auth_token = self.auth_token
+                print("✅ Using provided ngrok authentication token")
             
             # Start the tunnel
             logger.info(f"Starting ngrok tunnel for port {self.port}")
@@ -53,6 +57,10 @@ class NgrokManager:
             print(f"\n❌ Failed to start ngrok tunnel: {e}")
             print("Make sure ngrok is installed and properly configured.")
             print("You can install ngrok with: pip install pyngrok")
+            if not self.auth_token:
+                print("\n⚠️ No ngrok authentication token provided.")
+                print("For better stability, set NGROK_AUTH_TOKEN in your .env file.")
+                print("Get your token from: https://dashboard.ngrok.com/get-started/your-authtoken")
             return None
     
     def stop_tunnel(self):
