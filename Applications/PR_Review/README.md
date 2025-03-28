@@ -95,6 +95,30 @@ The PR Review Bot requires a GitHub Personal Access Token with specific permissi
 
 **Important**: The token must have `admin:repo_hook` scope to create webhooks. If you see permission errors when running the bot, check that your token has the correct scopes.
 
+## Ngrok Authentication Setup
+
+The PR Review Bot uses ngrok to create a public URL for your local server. For this to work properly, you need to set up ngrok authentication:
+
+1. **Sign up for ngrok**:
+   - Go to https://dashboard.ngrok.com/signup
+   - Create a free account
+
+2. **Get your authentication token**:
+   - After signing up, go to https://dashboard.ngrok.com/get-started/your-authtoken
+   - Copy your authentication token
+
+3. **Add the token to your `.env` file**:
+   ```
+   NGROK_AUTH_TOKEN="your_ngrok_auth_token_here"
+   ```
+
+4. **Alternative: Configure ngrok manually** (one-time setup):
+   ```bash
+   ngrok config add-authtoken your_ngrok_auth_token_here
+   ```
+
+This authentication is required for ngrok to work properly. Without it, you'll see authentication errors when starting the bot.
+
 ## Usage
 
 ### Starting the Server
@@ -115,7 +139,7 @@ The server will:
 
 ### Automatic ngrok Integration
 
-The PR Review Bot now includes built-in ngrok integration:
+The PR Review Bot includes built-in ngrok integration:
 
 1. When you start the bot with `USE_NGROK="true"` in your `.env` file:
    - The bot automatically starts ngrok to create a tunnel to your local server
@@ -136,6 +160,31 @@ The PR Review Bot now includes built-in ngrok integration:
 4. If you prefer to manage ngrok manually:
    - Set `USE_NGROK="false"` in your `.env` file
    - Set `WEBHOOK_URL="your-public-url/webhook"` with your manually created URL
+
+### Troubleshooting Ngrok Issues
+
+If you see errors like "authentication failed" when starting ngrok, try these steps:
+
+1. **Check your authentication token**:
+   - Make sure you've added your ngrok authentication token to the `.env` file
+   - Verify the token is correct by checking at https://dashboard.ngrok.com/get-started/your-authtoken
+
+2. **Set up authentication manually**:
+   ```bash
+   ngrok config add-authtoken your_ngrok_auth_token_here
+   ```
+
+3. **Check ngrok installation**:
+   - Make sure ngrok is installed: `pip install pyngrok`
+   - Try running ngrok manually to verify it works: `ngrok http 8000`
+
+4. **Check for conflicting ngrok processes**:
+   - Make sure no other ngrok processes are running
+   - You can kill all ngrok processes with: `pkill ngrok` (Linux/Mac) or `taskkill /f /im ngrok.exe` (Windows)
+
+5. **Check your network connection**:
+   - Ngrok requires internet access to create tunnels
+   - Make sure your firewall isn't blocking ngrok
 
 ### Manual Public URL Setup (Alternative)
 
