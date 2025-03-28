@@ -21,17 +21,21 @@
 - Codegen integration for intelligent PR review
 - Root directory markdown file analysis
 - Automated commenting and approvals
+- Dynamic webhook management for all repositories
 
 ## Configuration Options
 
 - Webhook support for immediate reviews
 - Port configuration for local server
+- Automatic webhook setup for all repositories
+- Support for ngrok and other tunneling services
 
 ## User Experience
 
 - Clear logs of PR review process
 - Detailed comments on PR issues
 - Auto-approval for compliant PRs
+- Automatic webhook management
 
 ## Installation
 
@@ -65,6 +69,7 @@
    # Server Configuration
    PORT=8000
    WEBHOOK_SECRET="your_webhook_secret_here"
+   WEBHOOK_URL="https://your-public-url.ngrok.io/webhook"
    
    # Codegen Configuration
    ANTHROPIC_API_KEY="your_anthropic_api_key_here"
@@ -83,15 +88,49 @@ python app.py
 
 The server will start on the port specified in your configuration (default: 8000).
 
-### Setting Up GitHub Webhooks
+### Making Your Server Publicly Accessible
 
-1. Go to your GitHub repository settings
-2. Navigate to "Webhooks" and click "Add webhook"
-3. Set the Payload URL to your server's URL (e.g., `http://your-server:8000/webhook`)
-4. Set Content type to `application/json`
-5. Set the Secret to match your `WEBHOOK_SECRET` in the `.env` file
-6. Select "Let me select individual events" and choose "Pull requests"
-7. Click "Add webhook"
+GitHub webhooks require a publicly accessible URL. Here are some options:
+
+#### Option 1: ngrok (Recommended for Development/Testing)
+
+[ngrok](https://ngrok.com/) creates a secure tunnel to your local server:
+
+1. Install ngrok: `pip install pyngrok` or download from [ngrok.com](https://ngrok.com/)
+2. Start your FastAPI server: `python app.py`
+3. In another terminal, run: `ngrok http 8000`
+4. ngrok will provide a public URL (like `https://abc123.ngrok.io`)
+5. Set this URL in your `.env` file: `WEBHOOK_URL="https://abc123.ngrok.io/webhook"`
+6. Restart the server or use the `/setup-webhooks` endpoint to update all webhooks
+
+#### Option 2: Deploy to a Public Server (Recommended for Production)
+
+For a production environment, deploy your FastAPI app to a server with a public IP:
+- Cloud providers (AWS, Azure, GCP)
+- PaaS solutions (Heroku, Render, Railway)
+- Your own server with a public IP
+
+### Automatic Webhook Management
+
+The PR Review Bot automatically manages webhooks for all repositories accessible by your GitHub token:
+
+1. On startup, if `WEBHOOK_URL` is provided, it will:
+   - Fetch all repositories accessible by your token
+   - Check if each repository has a webhook for PR reviews
+   - Create webhooks for repositories that don't have one
+   - Update webhook URLs for repositories with outdated URLs
+
+2. You can also manually trigger webhook setup:
+   ```
+   POST /setup-webhooks
+   ```
+
+3. Check webhook status:
+   ```
+   GET /webhook-status
+   ```
+
+4. When new repositories are created, the bot will automatically add webhooks to them (if the repository creation webhook is set up).
 
 ### Manual PR Review
 
@@ -109,9 +148,10 @@ curl -X POST http://localhost:8000/review/pixeliumperfecto/codegen/123
 
 ## How It Works
 
-1. **Webhook Reception**: The bot receives webhook events from GitHub when PRs are opened or updated
-2. **Documentation Analysis**: It extracts content from all markdown files in the repository's root directory
-3. **PR Analysis**: Using Codegen, it analyzes the PR against the documentation requirements
-4. **Review Generation**: It generates a detailed review with specific issues and suggestions
-5. **GitHub Integration**: It posts comments and formal reviews on the PR
-6. **Auto-Approval**: If the PR complies with documentation, it automatically approves it
+1. **Webhook Management**: The bot automatically sets up and maintains webhooks for all repositories
+2. **Webhook Reception**: It receives webhook events from GitHub when PRs are opened or updated
+3. **Documentation Analysis**: It extracts content from all markdown files in the repository's root directory
+4. **PR Analysis**: Using Codegen, it analyzes the PR against the documentation requirements
+5. **Review Generation**: It generates a detailed review with specific issues and suggestions
+6. **GitHub Integration**: It posts comments and formal reviews on the PR
+7. **Auto-Approval**: If the PR complies with documentation, it automatically approves it
